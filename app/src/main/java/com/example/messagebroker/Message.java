@@ -223,9 +223,9 @@ public class Message implements Parcelable {
      * @return bundle containing the header content of the message
      * @hide
      */
-//    public Bundle getBundle() {
-//        return bundle;
-//    }
+    public Bundle getBundle() {
+        return bundle;
+    }
 
     public static class Builder {
         private final String topic;
