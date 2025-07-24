@@ -88,22 +88,45 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        // MessageListener를 등록하여 메시지를 수신할 때마다 호출되는 콜백을 설정 -> try/catch로 예외 처리
-        boolean result = false;
-        try {
-            result = messagingManager.subscribe(client, filter);
-        } catch (com.example.messagebroker.MessageListenerException e) {
-            runOnUiThread(() -> {
-                logMessage("❌ 구독 중 예외 발생: " + e.getMessage());
-            });
-        }
-        final boolean subscribeResult = result;
+        // 연결 리스너를 설정하여 서비스 연결 후에 subscribe 호출
+        MessagingManager.MessagingServiceConnectionListener connectionListener =
+                new MessagingManager.MessagingServiceConnectionListener() {
+                    @Override
+                    public void onConnected() {
+                        // 서비스 연결 완료 후 subscribe 호출
+                        boolean result = false;
+                        try {
+                            result = messagingManager.subscribe(client, filter);
+                        } catch (com.example.messagebroker.MessageListenerException e) {
+                            runOnUiThread(() -> {
+                                logMessage("❌ 구독 중 예외 발생: " + e.getMessage());
+                            });
+                            return;
+                        }
+
+                        final boolean subscribeResult = result;
+                        runOnUiThread(() -> {
+                            if (subscribeResult) {
+                                logMessage("✅ [" + topic + "] 구독 성공");
+                            } else {
+                                logMessage("❌ [" + topic + "] 구독 실패");
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onDisconnected() {
+                        runOnUiThread(() -> {
+                            logMessage("⚠️ MessagingService 연결이 끊어졌습니다");
+                        });
+                    }
+                };
+
+        // 연결 리스너 설정
+        messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
+
         runOnUiThread(() -> {
-            if (subscribeResult) {
-                logMessage("\uD83D\uDCB1 '" + topic + "' 토픽 구독 시작");
-            } else {
-                logMessage("❌ '" + topic + "' 구독 실패");
-            }
+            logMessage("🔄 [" + topic + "] 구독 요청 중...");
         });
     }
 
