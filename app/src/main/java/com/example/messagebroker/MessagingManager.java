@@ -608,7 +608,7 @@ public class MessagingManager implements AutoCloseable {
      */
     // Workaround for checkstyle bug: checkstyle complains about missing SecurityException
     // in the method signature. See: https://github.com/checkstyle/checkstyle/issues/5088
-    @SuppressWarnings("checkstyle:javadocmethod")
+    // @SuppressWarnings("checkstyle:javadocmethod")
     @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
     public boolean
     subscribe(@NonNull MessageListener client, @NonNull Filter filter, @Nullable Handler handler)
