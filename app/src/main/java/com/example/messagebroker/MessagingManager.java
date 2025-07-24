@@ -618,8 +618,8 @@ public class MessagingManager implements AutoCloseable {
 
         try {
             IMessageListener.Stub messageListener = createMessageListenerProxy(client, handler);
-            return handleResult(serviceHelper.get().subscribe(messageListener,
-                    Objects.hash(client, sessionId), filter, applicationPackageName));
+            return serviceHelper.get().subscribe(messageListener,
+                    Objects.hash(client, sessionId), filter, applicationPackageName);
         } catch (RemoteException e) {
             throw new RuntimeException(e);
         }
@@ -686,8 +686,8 @@ public class MessagingManager implements AutoCloseable {
         Objects.requireNonNull(filter);
 
         try {
-            return handleResult(serviceHelper.get().unsubscribe(Objects.hash(client, sessionId),
-                    filter));
+            // IMessagingService.unsubscribe는 boolean을 반환하므로 handleResult를 사용하지 않고 바로 반환
+            return serviceHelper.get().unsubscribe(Objects.hash(client, sessionId));
         } catch (RemoteException e) {
             throw new RuntimeException(e);
         }
@@ -714,8 +714,8 @@ public class MessagingManager implements AutoCloseable {
             throws MessageListenerException {
         Objects.requireNonNull(client);
         try {
-            return handleResult(serviceHelper.get().unsubscribeAll(Objects.hash(client,
-                    sessionId)));
+            return serviceHelper.get().unsubscribeAll(Objects.hash(client,
+                    sessionId));
         } catch (RemoteException e) {
             throw new RuntimeException(e);
         }
@@ -871,15 +871,17 @@ public class MessagingManager implements AutoCloseable {
      * filter rules set by the client. A sample code for subscribing a client with
      * the message broker service can be found in the documentation of {@link MessagingManager}
      */
-//    public interface MessageListener {
-//        /**
-//         * Called when a {@link Message} received by the message broker service satisfies
-//         * one or more {@link Filter} rules the client subscribed for.
-//         *
-//         * @param message contains the new {@link Message}
-//         */
-//        void onMessage(Message message);
-//    }
+
+    // 내부적으로 IMessagingService의 IMessageListener를 사용하여 IPC 통신을 수행
+    public interface MessageListener {
+        /**
+         * Called when a {@link Message} received by the message broker service satisfies
+         * one or more {@link Filter} rules the client subscribed for.
+         *
+         * @param message contains the new {@link Message}
+         */
+        void onMessage(Message message);
+    }
 
 //    private static void handlePortResult(MessageBrokerResult result)
 //            throws MessageBrokerConnectionException {

@@ -87,9 +87,19 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         };
-        boolean result = messagingManager.subscribe(client, filter);
+
+        // MessageListener를 등록하여 메시지를 수신할 때마다 호출되는 콜백을 설정 -> try/catch로 예외 처리
+        boolean result = false;
+        try {
+            result = messagingManager.subscribe(client, filter);
+        } catch (com.example.messagebroker.MessageListenerException e) {
+            runOnUiThread(() -> {
+                logMessage("❌ 구독 중 예외 발생: " + e.getMessage());
+            });
+        }
+        final boolean subscribeResult = result;
         runOnUiThread(() -> {
-            if (result) {
+            if (subscribeResult) {
                 logMessage("\uD83D\uDCB1 '" + topic + "' 토픽 구독 시작");
             } else {
                 logMessage("❌ '" + topic + "' 구독 실패");
