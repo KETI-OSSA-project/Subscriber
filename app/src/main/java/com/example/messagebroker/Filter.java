@@ -23,15 +23,15 @@ package com.example.messagebroker;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.securityandsafetythings.messagebroker.MqttTopicUtils.checkFilterTopicSyntax;
-import static com.securityandsafetythings.messagebroker.MqttTopicUtils.match;
+import static com.example.messagebroker.MqttTopicUtils.checkFilterTopicSyntax;
+import static com.example.messagebroker.MqttTopicUtils.match;
 import static java.util.Objects.requireNonNull;
 
 
