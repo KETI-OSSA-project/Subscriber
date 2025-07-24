@@ -406,19 +406,20 @@ public class MessagingManager implements AutoCloseable {
      * @throws RuntimeException on connection error (e.g. service does not exist)
      */
     @MainThread
-//    @NonNull
-//    public static MessagingManager getConnectedInstance(
-//            @NonNull Context context, @NonNull MessagingServiceConnectionListener listener) {
-//        Objects.requireNonNull(context);
-//        Objects.requireNonNull(listener);
-//        if (Looper.myLooper() != Looper.getMainLooper()) {
-//            Log.w(TAG, "getConnectedInstance is not called on the main thread!" +
-//                    " This may lead to inconsistent behavior.");
-//        }
-//        MessagingManager manager = new MessagingManager(context);
-//        manager.setMessagingServiceConnectionListener(listener, null);
-//        return manager;
-//    }
+    @NonNull
+    public static MessagingManager getConnectedInstance(
+            @NonNull Context context, @NonNull MessagingServiceConnectionListener listener) {
+        Objects.requireNonNull(context);
+        Objects.requireNonNull(listener);
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            Log.w(TAG, "getConnectedInstance is not called on the main thread!" +
+                    " This may lead to inconsistent behavior.");
+        }
+        MessagingManager manager = new MessagingManager(context);
+        manager.setMessagingServiceConnectionListener(listener, null);
+        return manager;
+    }
+
 
     /**
      * Creates an instance.
