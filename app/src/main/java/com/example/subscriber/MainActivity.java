@@ -70,8 +70,8 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // api 표준화 대상
     // 주어진 토픽을 MQTT 브로커에 구독 요청하는 함수
-    // topic: 구독한 토픽, payload: 메세지 내용
     private void subscribeTo(String topic) {
         mqttClient.subscribeWith()
                 .topicFilter(topic)
