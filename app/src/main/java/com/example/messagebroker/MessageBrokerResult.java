@@ -26,7 +26,7 @@ import android.os.Parcelable;
 
 /**
  * Status code list.
- *
+ * 결과값을 나타내는 열거형 클래스입니다.
  * <p>Used as result of some method calls on {@link MessagingManager}.
  *
  * @hide
