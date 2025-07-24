@@ -374,8 +374,13 @@ public class MessagingManager implements AutoCloseable {
 
     private MessagingManager(@NonNull Context context) {
         Objects.requireNonNull(context);
+
+        // 현재 앱 내의 MessagingService에 직접 바인딩
+        ComponentName serviceComponent = new ComponentName(context.getPackageName(),
+                "com.example.messagebroker.MessagingService");
+
         serviceHelper = BoundServiceHelper.newInstance(context,
-                SERVICE,
+                serviceComponent,
                 IMessagingService.Stub::asInterface);
 
         // Bind to the service. -> onServiceConnected()가 호출되기 전까지 Proxy == null (비동기)
@@ -616,9 +621,14 @@ public class MessagingManager implements AutoCloseable {
         Objects.requireNonNull(client);
         Objects.requireNonNull(filter);
 
+        IMessagingService service = serviceHelper.get();
+        if (service == null) {
+            throw new RuntimeException("MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
+        }
+
         try {
             IMessageListener.Stub messageListener = createMessageListenerProxy(client, handler);
-            return serviceHelper.get().subscribe(messageListener,
+            return service.subscribe(messageListener,
                     Objects.hash(client, sessionId), filter, applicationPackageName);
         } catch (RemoteException e) {
             throw new RuntimeException(e);

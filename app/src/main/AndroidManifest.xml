@@ -33,6 +33,15 @@
             </intent-filter>
         </activity>
 
+        <!-- MessagingService 등록 -->
+        <service
+            android:name="com.example.messagebroker.MessagingService"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.messagebroker.MessagingService" />
+            </intent-filter>
+        </service>
 
     </application>
 
