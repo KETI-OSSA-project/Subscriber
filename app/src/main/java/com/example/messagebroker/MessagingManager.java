@@ -577,13 +577,13 @@ public class MessagingManager implements AutoCloseable {
      */
     // Workaround for checkstyle bug: checkstyle complains about missing SecurityException
     // in the method signature. See: https://github.com/checkstyle/checkstyle/issues/5088
-//    @SuppressWarnings("checkstyle:javadocmethod")
-//    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
-//    public boolean
-//    subscribe(@NonNull MessageListener client, @NonNull Filter filter)
-//            throws MessageListenerException {
-//        return subscribe(client, filter, null);
-//    }
+    @SuppressWarnings("checkstyle:javadocmethod")
+    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
+    public boolean
+    subscribe(@NonNull MessageListener client, @NonNull Filter filter)
+            throws MessageListenerException {
+        return subscribe(client, filter, null);
+    }
 
     /**
      * Subscribe for receiving messages from the message broker service satisfying rules set in the
@@ -607,60 +607,60 @@ public class MessagingManager implements AutoCloseable {
      */
     // Workaround for checkstyle bug: checkstyle complains about missing SecurityException
     // in the method signature. See: https://github.com/checkstyle/checkstyle/issues/5088
-//    @SuppressWarnings("checkstyle:javadocmethod")
-//    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
-//    public boolean
-//    subscribe(@NonNull MessageListener client, @NonNull Filter filter, @Nullable Handler handler)
-//            throws MessageListenerException {
-//        Objects.requireNonNull(client);
-//        Objects.requireNonNull(filter);
-//
-//        try {
-//            IMessageListener.Stub messageListener = createMessageListenerProxy(client, handler);
-//            return handleResult(serviceHelper.get().subscribe(messageListener,
-//                    Objects.hash(client, sessionId), filter, applicationPackageName));
-//        } catch (RemoteException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
+    @SuppressWarnings("checkstyle:javadocmethod")
+    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
+    public boolean
+    subscribe(@NonNull MessageListener client, @NonNull Filter filter, @Nullable Handler handler)
+            throws MessageListenerException {
+        Objects.requireNonNull(client);
+        Objects.requireNonNull(filter);
+
+        try {
+            IMessageListener.Stub messageListener = createMessageListenerProxy(client, handler);
+            return handleResult(serviceHelper.get().subscribe(messageListener,
+                    Objects.hash(client, sessionId), filter, applicationPackageName));
+        } catch (RemoteException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
 
-//    private boolean handleResult(MessageBrokerResult result) throws MessageListenerException {
-//        switch (result) {
-//            case FILTER_NOT_ADDED:
-//            case FILTER_NOT_REMOVED:
-//                return false;
-//            case FILTER_ADDED:
-//            case FILTER_REMOVED:
-//            case ALL_FILTERS_REMOVED:
-//                return true;
-//            case LISTENER_NOT_SUBSCRIBED:
-//                throw new MessageListenerException(
-//                        MessageListenerException.Type.LISTENER_NOT_SUBSCRIBED);
-//            case NULL_FILTER:
-//            case NULL_LISTENER:
-//            case NULL_PACKAGE_NAME:
-//            default:
-//                throw new RuntimeException(
-//                        "Internal Error: incorrect result returned for this request: " +
-//                                result.name());
-//        }
-//    }
-//    private IMessageListener.Stub createMessageListenerProxy(MessageListener messageListener,
-//                                                             Handler handler) {
-//        IMessageListener.Stub messageListenerProxy =
-//                new IMessageListener.Stub() {
-//                    @Override
-//                    public void onMessage(Message message) throws RemoteException {
-//                        if (handler != null) {
-//                            handler.post(() -> messageListener.onMessage(message));
-//                        } else {
-//                            messageListener.onMessage(message);
-//                        }
-//                    }
-//                };
-//        return messageListenerProxy;
-//    }
+    private boolean handleResult(MessageBrokerResult result) throws MessageListenerException {
+        switch (result) {
+            case FILTER_NOT_ADDED:
+            case FILTER_NOT_REMOVED:
+                return false;
+            case FILTER_ADDED:
+            case FILTER_REMOVED:
+            case ALL_FILTERS_REMOVED:
+                return true;
+            case LISTENER_NOT_SUBSCRIBED:
+                throw new MessageListenerException(
+                        MessageListenerException.Type.LISTENER_NOT_SUBSCRIBED);
+            case NULL_FILTER:
+            case NULL_LISTENER:
+            case NULL_PACKAGE_NAME:
+            default:
+                throw new RuntimeException(
+                        "Internal Error: incorrect result returned for this request: " +
+                                result.name());
+        }
+    }
+    private IMessageListener.Stub createMessageListenerProxy(MessageListener messageListener,
+                                                             Handler handler) {
+        IMessageListener.Stub messageListenerProxy =
+                new IMessageListener.Stub() {
+                    @Override
+                    public void onMessage(Message message) throws RemoteException {
+                        if (handler != null) {
+                            handler.post(() -> messageListener.onMessage(message));
+                        } else {
+                            messageListener.onMessage(message);
+                        }
+                    }
+                };
+        return messageListenerProxy;
+    }
 
     /**
      * Unsubscribe to a {@link Filter} object already subscribed by a {@link MessageListener}.
@@ -675,22 +675,22 @@ public class MessagingManager implements AutoCloseable {
      */
     // Workaround for checkstyle bug: checkstyle complains about missing SecurityException
     // in the method signature. See: https://github.com/checkstyle/checkstyle/issues/5088
-//    @SuppressWarnings("checkstyle:javadocmethod")
-//    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
-//    public boolean
-//    unsubscribe(@NonNull MessageListener client, @NonNull Filter filter)
-//            throws MessageListenerException {
-//
-//        Objects.requireNonNull(client);
-//        Objects.requireNonNull(filter);
-//
-//        try {
-//            return handleResult(serviceHelper.get().unsubscribe(Objects.hash(client, sessionId),
-//                    filter));
-//        } catch (RemoteException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
+    @SuppressWarnings("checkstyle:javadocmethod")
+    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
+    public boolean
+    unsubscribe(@NonNull MessageListener client, @NonNull Filter filter)
+            throws MessageListenerException {
+
+        Objects.requireNonNull(client);
+        Objects.requireNonNull(filter);
+
+        try {
+            return handleResult(serviceHelper.get().unsubscribe(Objects.hash(client, sessionId),
+                    filter));
+        } catch (RemoteException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     /**
      * Unsubscribe to all the {@link Filter} objects subscribed by a {@link MessageListener}.
@@ -706,19 +706,19 @@ public class MessagingManager implements AutoCloseable {
      */
     // Workaround for checkstyle bug: checkstyle complains about missing SecurityException
     // in the method signature. See: https://github.com/checkstyle/checkstyle/issues/5088
-//    @SuppressWarnings("checkstyle:javadocmethod")
-//    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
-//    public boolean
-//    unsubscribe(@NonNull MessageListener client)
-//            throws MessageListenerException {
-//        Objects.requireNonNull(client);
-//        try {
-//            return handleResult(serviceHelper.get().unsubscribeAll(Objects.hash(client,
-//                    sessionId)));
-//        } catch (RemoteException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
+    @SuppressWarnings("checkstyle:javadocmethod")
+    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
+    public boolean
+    unsubscribe(@NonNull MessageListener client)
+            throws MessageListenerException {
+        Objects.requireNonNull(client);
+        try {
+            return handleResult(serviceHelper.get().unsubscribeAll(Objects.hash(client,
+                    sessionId)));
+        } catch (RemoteException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     /**
      * Create an InPort. The provided {@link PortConfiguration} is used to configure the InPort.

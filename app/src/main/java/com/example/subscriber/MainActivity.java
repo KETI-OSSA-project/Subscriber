@@ -6,6 +6,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.example.messagebroker.Filter;
+import com.example.messagebroker.MessagingManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -73,31 +75,26 @@ public class MainActivity extends AppCompatActivity {
     // api 표준화 대상
     // 주어진 토픽을 MQTT 브로커에 구독 요청하는 함수
     private void subscribeTo(String topic) {
-        mqttClient.subscribeWith()
-                .topicFilter(topic)
-                .qos(MqttQos.AT_LEAST_ONCE)  // QoS 수준
-                .callback(publish -> {
-                    Optional<ByteBuffer> payloadOptional = publish.getPayload();
-                    String payload = payloadOptional.map(byteBuffer -> {
-                        byte[] bytes = new byte[byteBuffer.remaining()];
-                        byteBuffer.get(bytes);
-                        return new String(bytes);
-                    }).orElse("");
-
-                    runOnUiThread(() -> {
-                        logMessage("📥 [" + topic + "] 수신: " + payload);  // 브로커로부터 메세지 받을 때마다 payload 수신
-                    });
-                })
-                .send()
-                .whenComplete((subAck, throwable) -> {
-                    runOnUiThread(() -> {
-                        if (throwable == null) {
-                            logMessage("📡 '" + topic + "' 토픽 구독 시작");
-                        } else {
-                            logMessage("❌ '" + topic + "' 구독 실패: " + throwable.getMessage());
-                        }
-                    });
+        MessagingManager messagingManager = MessagingManager.getMessagingManager(this);
+        Filter filter = new Filter.Builder().setTopic(topic).build();
+        MessagingManager.MessageListener client = new MessagingManager.MessageListener() {
+            @Override
+            public void onMessage(com.example.messagebroker.Message message) {
+                byte[] payloadBytes = message.getPayload();
+                String payload = payloadBytes != null ? new String(payloadBytes) : "";
+                runOnUiThread(() -> {
+                    logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload);
                 });
+            }
+        };
+        boolean result = messagingManager.subscribe(client, filter);
+        runOnUiThread(() -> {
+            if (result) {
+                logMessage("\uD83D\uDCB1 '" + topic + "' 토픽 구독 시작");
+            } else {
+                logMessage("❌ '" + topic + "' 구독 실패");
+            }
+        });
     }
 
     // 로그를 UI에 출력하는 함수
