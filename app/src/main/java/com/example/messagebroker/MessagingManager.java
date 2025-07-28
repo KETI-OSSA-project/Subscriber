@@ -40,7 +40,8 @@ import static com.example.messagebroker.Constants.MESSAGING_SERVICE;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Application interface for publishing and receiving messages from the message broker service.
+ * Application interface for receiving messages from the MQTT broker service.
+ * 이 매니저는 표준 MQTT Subscriber 기능만을 제공합니다.
  *
  * <p>All the requests to the message broker service are handled by the manager object.
  * The {@link #getMessagingManager(Context)} provides an instance of the manager object.
@@ -53,7 +54,7 @@ import static java.util.Objects.requireNonNull;
  * <h4>Usage:</h4>
  * <pre><code>
  * messagingManager = MessagingManager.getMessagingManager(context);
- * MessagingManager. MessagingServiceConnectionListener connectionListener = new MessagingManager
+ * MessagingManager.MessagingServiceConnectionListener connectionListener = new MessagingManager
  * .MessagingServiceConnectionListener () {
  *     public void onConnected() {
  *        ...
@@ -69,14 +70,7 @@ import static java.util.Objects.requireNonNull;
  * // Cleanup resources
  * messagingManager.disconnect();
  * </code></pre>
- * Messaging Service supports two approaches for sending and receiving messages:
- * <ul>
- *     <li>Message Broker API</li>
- *     <li>Message Ports API</li>
- * </ul>
- * Note: There is no interoperability of messages between both the approaches.
- * <br/>
- * <br/>
+ *
  * <h2>Message Broker API</h2>
  *
  * <p>Following are the different types of requests that can be made to the messaging service
@@ -91,7 +85,6 @@ import static java.util.Objects.requireNonNull;
  * triggered on the callback {@link MessageListener#onMessage(Message)} of the client</p>
  *
  * <h4>Usage:</h4>
- * // Create a client for listening to updates from the message broker service
  * <pre><code>
  * MessagingManager.MessageListener client = new MessagingManager.MessageListener() {
  *      public void onMessage(Message message) {
@@ -99,18 +92,16 @@ import static java.util.Objects.requireNonNull;
  *      }
  * };
  *
- * // Create a filter
+ * // Create a filter for the topic you wish to subscribe to
  * String topic1 = // topic you wish to subscribe to
- * String publisherId1 = // fill if you want to get messages only from a specific publisher
- * Filter filter1 = new Filter.Builder().setTopic(topic1).setPublisherId(publisherId1).build();
+ * Filter filter1 = new Filter.Builder().setTopic(topic1).build();
  * // Subscribe for getting messages satisfying the above defined filter conditions.
  * boolean result = messagingManager.subscribe(client, filter1);
  * // result = true; on successful subscription.
  *
  * // Create another filter
- * String topic2 = // topic you wish to subscribe to
- * String publisherId2 = // fill if you want to get messages only from a specific publisher
- * Filter filter2 = new Filter.Builder().setTopic(topic2).setPublisherId(publisherId2).build();
+ * String topic2 = // another topic you wish to subscribe to
+ * Filter filter2 = new Filter.Builder().setTopic(topic2).build();
  *
  * // Subscribe also to the second filter created above.
  * boolean result = messagingManager.subscribe(client, filter2);
@@ -121,7 +112,6 @@ import static java.util.Objects.requireNonNull;
  *
  * // Subscribing filter1 again now returns false since the filter is already in the subscription
  * list of the client
- *
  * boolean result = messagingManager.subscribe(client, filter1); // returns false
  * </code></pre>
  *
@@ -140,7 +130,6 @@ import static java.util.Objects.requireNonNull;
  * boolean result = messagingManager.unsubscribe(client, filter1);
  * // returns true if filter1 is successfully removed from the subscription list of the client.
  *
- *
  * // Trying to unsubscribe a {@link Filter} object not in the subscription list returns false
  * boolean result = messagingManager.unsubscribe(client, filter1);
  * // Returns false since filter1 is no more in the subscription list of the client.
@@ -150,214 +139,6 @@ import static java.util.Objects.requireNonNull;
  * // returns true on successfully removing all the active subscriptions.
  * // false is returned if all the previously subscribed filters are already unsubscribed (no
  * // active subscriptions to unsubscribe).
- * </code></pre>
- *
- * <h3>Publishing messages</h3>
- * <p>A client can publish messages to the message broker service, using the function
- * {@link #publish(Message)}. The message broker service parses this data and then communicates
- * it to the interested clients</p>
- *
- * <p>Message broker service can handle asynchronous publish requests. The publish requests are
- * queued and processed one by one. The order of processing may not be the same as the order in
- * which the publish requests are received.
- *
- * <h4>Usage:</h4>
- * <pre><code>
- * // Create a new {@link Message} object
- * messagingManager.publish(message);
- * </code></pre>
- *
- * <h3>Publishing messages with response</h3>
- * <p>A client can publish messages with optional response topic and correlation data set. The
- * response topic represents the topic on which the responses from the receivers of the message
- * are expected. Both the actual topic of the initial publish and the response topic can have one or
- * more subscribers. It is a good practice for the publisher to subscribe on the contained response
- * topic before publishing the message.</p>
- *
- * <p>The publisher can use the correlation data for identifying which specific publish a
- * response that is received later relates. Response topics can be used without
- * correlation data. Using the correlation data makes it possible for the publisher to handle
- * asynchronous responses that can possibly be sent from multiple responders.</p>
- *
- * <h4>Usage:</h4>
- * <pre><code>
- * // Publisher subscribes to response topic
- * String responseTopic = // topic you wish to subscribe for responses
- * Filter filter = new Filter.Builder().setTopic(responseTopic).build();
- * MessagingManager.MessageListener publisherClient = new MessagingManager.MessageListener() {
- *      public void onMessage(Message message) {
- *          byte[] correlationData = message.getCorrelationData();
- *          // Use correlationData for identifying a response.
- *      }
- * };
- * messagingManager.subscribe(publisherClient, filter);
- *
- * // Publish a {@link Message} with response topic and correlation data attached
- * Message message = new Message.Builder().setTopic(publishTopic).setResponseTopic(responseTopic)
- * .setCorrelationData("someCorrelationData".getBytes()).build();
- * messagingManager.publish(message);
- *
- * // Responder that has subscribed to publishTopic will get a message and can reply to the
- * publisher by using the {@link Message#getResponseTopic()} and
- * {@link Message#getCorrelationData()}
- * MessagingManager.MessageListener responderClient = new MessagingManager.MessageListener() {
- *      public void onMessage(Message message) {
- *          String responseTopic = message.getResponseTopic();
- *          byte[] correlationData = message.getCorrelationData();
- *          Message responseMessage = new Message.Builder().setTopic(responseTopic)
- *          .setCorrelationData(correlationData).build();
- *          messagingManager.publish(responseMessage);
- *      }
- * };
- * </code></pre>
- *
- * <h2>Message Ports API</h2>
- *
- * <p>To start with, a {@code MessagingManifest.xml} needs to be written and added to the assets/
- * folder of the application. The content of the XML depends on the type of request to the
- * Messaging Service.
- * </p>
- *
- * <p>Following are the different types of requests that can be made to the messaging service
- * using the Message Ports API.</p>
- *
- * <h3>Send Message using {@link OutPort}</h3>
- *
- * <p>An application can send {@link com.securityandsafetythings.messagebroker.ports.Message}s
- * to other application(s) using an {@link OutPort}.
- * All the other applications using an {@link InPort} matching to the {@link OutPort} will
- * receive a copy of the {@link com.securityandsafetythings.messagebroker.ports.Message}.</p>
- *
- * <p>To create an instance of {@link OutPort}, the application needs to have a {@code
- * MessagingManifest.xml} in the assets/ folder having contents similar to the below given XML,
- * declaring configuration of the {@link OutPort}.</p>
- *
- * <p>Example {@code MessagingManifest.xml} for {@link OutPort} with arbitrary topicA.</p>
- * <pre><code>
- * &lt;?xml version="1.0" encoding="UTF-8" standalone="no"?&gt;
- * &lt;Application schemaVersion="1.0"&gt;
- *     &lt;!--PortConfiguration is the node to describe the port used in the application. The use
- *     of its attributes are:
- *     name attribute is used to assign a unique arbitrary name "DataOutPort" to the port.
- *     type attribute is used to declare the type of the port as "OutPort".
- *     topic attribute is used to assign an arbitrary MQTT Topic "topicA".--&gt;
- *     &lt;PortConfiguration name="DataOutPort" type="OutPort" topic="topicA"&gt;
- *     &lt;/PortConfiguration&gt;
- * &lt;/Application&gt;
- * </code></pre>
- *
- * <p>Create {@link PortConfiguration} instance reading the configuration from XML, and
- * instantiate an {@link OutPort}:</p>
- * <pre><code>
- * OutPort outPort;
- * // Use the unique name "DataOutPort" used in the XML for the port configuration.
- * PortConfiguration outPortConfiguration
- * = PortConfiguration.createPortConfigurationFromAssets(getApplicationContext(),
- * "DataOutPort");
- *
- * try {
- *      outPort = mMessagingManager.createOutPort(outPortConfiguration)
- * } catch (MessageBrokerConnectionException e) {
- *      // handle the exception
- * }
- *
- * </code></pre>
- *
- * <p>Send a {@link com.securityandsafetythings.messagebroker.ports.Message} through
- * the outPort:</p>
- * <pre><code>
- * // Create a Message instance
- * Message message = new Message.Builder()
- *                     .setPayload(payload.getBytes())
- *                     .build();
- *
- * // Send the message
- * try {
- *      if (outPort != null){
- *                 outPort.send(message);
- *      }
- * } catch (MessageBrokerConnectionException e) {
- *     // Could not send the message.
- * }
- * </code></pre>
- *
- * <p>Delete the {@link OutPort} after use:</p>
- * <pre><code>
- * try {
- *      outPort.delete();
- *      outPort = null;
- * } catch (MessageBrokerConnectionException e) {
- *      // handle the exception
- * }
- * </code></pre>
- *
- * <h3>Receive a Message using {@link InPort}</h3>
- *
- * <p>An application can receive {@link com.securityandsafetythings.messagebroker.ports.Message}s
- * from other application(s) using an {@link InPort}.
- * The {@link InPort} will receive a copy of
- * the{@link com.securityandsafetythings.messagebroker.ports.Message} from all the other
- * {@link OutPort}s matching to the {@link InPort}.
- *
- * <p>To create an instance of {@link InPort}, the application needs to have a {@code
- * MessagingManifest.xml} in the assets/ folder having contents
- * similar to the below given XML, declaring the configuration of the {@link InPort}.</p>
- *
- * <p>Example {@code MessagingManifest.xml} for {@link InPort} with arbitrary topicA.</p>
- * <pre><code>
- * &lt;?xml version="1.0" encoding="UTF-8" standalone="no"?&gt;
- * &lt;Application schemaVersion="1.0"&gt;
- *     &lt;!--PortConfiguration is the node to describe the port used in the application. The use
- *     of its attributes are:
- *     name attribute is used to assign a unique arbitrary name "DataInPort" to the port.
- *     type attribute is used to declare the type of the port as "InPort".
- *     topic attribute is used to assign an arbitrary MQTT Topic filter "topicA".--&gt;
- *     &lt;PortConfiguration name="DataInPort" type="InPort" topic="topicA"&gt;
- *     &lt;/PortConfiguration&gt;
- * &lt;/Application&gt;
- * </code></pre>
- *
- * <p>Create {@link PortConfiguration} instance reading the configuration from XML, and
- * instantiate an {@link InPort}:</p>
- * <pre><code>
- * InPort inPort;
- * // Use the unique name "DataInPort" used in the XML for the port configuration.
- * PortConfiguration inPortConfiguration
- * = PortConfiguration.createPortConfigurationFromAssets(getApplicationContext(),
- * "DataInPort");
- *
- * try {
- *      inPort = mMessagingManager.createInPort(inPortConfiguration)
- * } catch (MessageBrokerConnectionException e) {
- *      // handle the exception
- * }
- *
- * </code></pre>
- *
- * <p>Receive a {@link com.securityandsafetythings.messagebroker.ports.Message} through
- * the inPort:</p>
- * <pre><code>
- * try {
- *      if (inPort != null){
- *          inPort.addMessageListener(new InPort.MessageListener() {
- *              public void onMessage( message) {
- *                  // Your code;
- *              }
- *          });
- *      }
- * } catch (MessageBrokerConnectionException e) {
- *     // Could not add the message listener
- * }
- * </code></pre>
- *
- * <p>Delete the {@link InPort} after use:</p>
- * <pre><code>
- * try {
- *      inPort.delete();
- *      inPort = null;
- * } catch (MessageBrokerConnectionException e) {
- *      // handle the exception
- * }
  * </code></pre>
  */
 public class MessagingManager implements AutoCloseable {
@@ -525,42 +306,6 @@ public class MessagingManager implements AutoCloseable {
     @Override
     public void close() {
         serviceHelper.close();
-    }
-
-    /**
-     * Publish a {@link Message} object to the message broker service.
-     * Requires <code>com.securityandsafetythings.permission.MESSAGE_PUBLISH</code> permission.
-     *
-     * @param message Message
-     * @throws SecurityException Can be thrown if the caller has no android permission
-     *                           <code>com.securityandsafetythings.permission
-     *                           .MESSAGE_PUBLISH</code>.
-     */
-    @RequiresPermission(Constants.MESSAGE_PUBLISH_PERMISSION)
-    // 동기 메서드이자 Wrapper 메서드
-    public void publish(@NonNull Message message) {
-        Objects.requireNonNull(message);
-        // message.setPublisherId(applicationPackageName);
-
-        // 바인딩이 안된 경우 (publish가 호출되기 전에 연결이 끊어진 경우)
-        if (serviceHelper == null) {
-            Log.w(TAG, "MessagingService가 아직 연결되지 않았습니다.");
-            return;
-        }
-
-        IMessagingService service = serviceHelper.get();
-        if (service == null) {
-            Log.w(TAG, "MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
-            return;
-        }
-
-        try {
-            service.publish(message);
-            Log.d(TAG, "메시지 발행 성공: " + message.getTopic());
-        } catch (RemoteException e) {
-            Log.e(TAG, "메시지 발행 중 RemoteException 발생", e);
-            throw new RuntimeException("메시지 발행 실패", e);
-        }
     }
 
     /**

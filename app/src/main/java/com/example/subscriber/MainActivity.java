@@ -82,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
             public void onMessage(com.example.messagebroker.Message message) {
                 byte[] payloadBytes = message.getPayload();
                 String payload = payloadBytes != null ? new String(payloadBytes) : "";
+                // 화면 UI에 메시지 출력 -> 로그 X
                 runOnUiThread(() -> {
                     logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload);
                 });
