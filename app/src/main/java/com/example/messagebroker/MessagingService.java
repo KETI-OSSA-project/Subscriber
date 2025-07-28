@@ -57,11 +57,6 @@ public class MessagingService extends Service {
      * AIDL 인터페이스 구현
      */
     private final IMessagingService.Stub binder = new IMessagingService.Stub() {
-//        @Override
-//        public void publish(Message message) throws RemoteException {
-//            // Subscriber는 메시지를 발행하지 않으므로 빈 구현
-//            Log.w(TAG, "Subscriber에서 publish 호출됨 - 지원하지 않는 기능입니다.");
-//        }
 
         @Override
         public boolean subscribe(IMessageListener listener, int clientHash, Filter filter, String applicationPackageName) throws RemoteException {
