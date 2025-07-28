@@ -16,18 +16,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 
-
 /**
- * MessagingService provides MQTT message broker functionality for Android applications.
- * 이 서비스는 MQTT 서버로부터 메시지를 수신하고 구독된 클라이언트들에게 전달합니다.
+ * MessagingService provides standard MQTT subscriber functionality for Android applications.
+ * 이 서비스는 표준 MQTT 클라이언트로서 특정 토픽을 구독하고 메시지를 수신합니다.
  *
  * This service implements the IMessagingService AIDL interface and manages:
- * - Message subscription from MQTT broker
- * - Client subscription management with filters
- * - Message routing from MQTT broker to subscribed clients
+ * - Subscription to specific MQTT topics
+ * - Message reception from MQTT broker
+ * - Message delivery to subscribed clients
  */
 public class MessagingService extends Service {
 
@@ -37,29 +35,21 @@ public class MessagingService extends Service {
     // 클라이언트 구독 정보를 관리하는 맵 (clientHash -> ClientInfo)
     private final Map<Integer, ClientInfo> subscribedClients = new ConcurrentHashMap<>();
 
-    // MQTT 토픽 구독 관리
+    // 현재 구독 중인 MQTT 토픽들
     private final Set<String> subscribedMqttTopics = new CopyOnWriteArraySet<>();
-
-    // 모든 수신된 메시지를 저장하는 리스트 (최근 메시지 기록용)
-    private final CopyOnWriteArrayList<Message> messageHistory = new CopyOnWriteArrayList<>();
-
-    // 최대 저장할 메시지 수
-    private static final int MAX_MESSAGE_HISTORY = 1000;
 
     /**
      * 클라이언트 정보를 담는 내부 클래스
      */
     private static class ClientInfo {
         final String packageName;
-        final long subscribeTime;
-        final IMessageListener listener; // 클라이언트 메시지 리스너
-        final Filter filter; // 메시지 필터
+        final IMessageListener listener;
+        final Filter filter;
 
         ClientInfo(String packageName, IMessageListener listener, Filter filter) {
             this.packageName = packageName;
             this.listener = listener;
             this.filter = filter;
-            this.subscribeTime = System.currentTimeMillis();
         }
     }
 
@@ -67,37 +57,36 @@ public class MessagingService extends Service {
      * AIDL 인터페이스 구현
      */
     private final IMessagingService.Stub binder = new IMessagingService.Stub() {
+//        @Override
+//        public void publish(Message message) throws RemoteException {
+//            // Subscriber는 메시지를 발행하지 않으므로 빈 구현
+//            Log.w(TAG, "Subscriber에서 publish 호출됨 - 지원하지 않는 기능입니다.");
+//        }
 
-        // publish는 subscriber에서는 사용하지 않지만 인터페이스 호환성을 위해 유지
         @Override
-        public void publish(Message message) throws RemoteException {
-            Log.w(TAG, "publish() 호출됨 - subscriber 서비스에서는 지원하지 않습니다.");
-        }
+        public boolean subscribe(IMessageListener listener, int clientHash, Filter filter, String applicationPackageName) throws RemoteException {
+            Log.d(TAG, "구독 요청 수신: " + applicationPackageName);
 
-        @Override
-        public boolean subscribe(IMessageListener listener, int clientHash, Filter filter, String packageName) throws RemoteException {
-            if (packageName == null || listener == null) {
-                Log.w(TAG, "Null package name or listener for subscription");
+            if (applicationPackageName == null || listener == null) {
+                Log.e(TAG, "잘못된 구독 파라미터");
                 return false;
             }
 
-            ClientInfo existingClient = subscribedClients.get(clientHash);
-            if (existingClient != null) {
-                Log.d(TAG, "Client already subscribed: " + packageName);
-                return false; // 이미 구독 중
+            // 중복 구독 체크
+            if (subscribedClients.containsKey(clientHash)) {
+                Log.d(TAG, "이미 구독 중인 클라이언트: " + applicationPackageName);
+                return false;
             }
 
-            ClientInfo clientInfo = new ClientInfo(packageName, listener, filter);
+            // 클라이언트 정보 저장
+            ClientInfo clientInfo = new ClientInfo(applicationPackageName, listener, filter);
             subscribedClients.put(clientHash, clientInfo);
 
-            Log.d(TAG, "Client subscribed: " + packageName + " (hash: " + clientHash + ")");
-            Log.d(TAG, "Total subscribers: " + subscribedClients.size());
+            Log.d(TAG, "클라이언트 구독 완료: " + applicationPackageName + " (hash: " + clientHash + ")");
+            Log.d(TAG, "총 구독자 수: " + subscribedClients.size());
 
-            // 필터에 따른 MQTT 토픽 구독 업데이트
-            updateMqttTopicSubscriptions();
-
-            // 기존 메시지 히스토리를 새 구독자에게 전달
-            deliverHistoryToNewSubscriber(clientInfo);
+            // 필터에서 토픽 추출하여 MQTT 구독
+            subscribeToTopicFromFilter(filter);
 
             return true;
         }
@@ -107,16 +96,16 @@ public class MessagingService extends Service {
             ClientInfo removedClient = subscribedClients.remove(clientHash);
 
             if (removedClient != null) {
-                Log.d(TAG, "Client unsubscribed: " + removedClient.packageName +
+                Log.d(TAG, "클라이언트 구독 해제: " + removedClient.packageName +
                           " (hash: " + clientHash + ")");
-                Log.d(TAG, "Remaining subscribers: " + subscribedClients.size());
+                Log.d(TAG, "남은 구독자 수: " + subscribedClients.size());
 
-                // MQTT 토픽 구독 업데이트
+                // 필요 시 MQTT 토픽 구독 해제 (다른 클라이언트가 사용하지 않는 경우)
                 updateMqttTopicSubscriptions();
 
                 return true;
             } else {
-                Log.w(TAG, "Attempted to unsubscribe non-existent client: " + clientHash);
+                Log.w(TAG, "존재하지 않는 클라이언트 구독 해제 시도: " + clientHash);
                 return false;
             }
         }
@@ -130,16 +119,15 @@ public class MessagingService extends Service {
         @Override
         public void basicTypes(int anInt, long aLong, boolean aBoolean,
                              float aFloat, double aDouble, String aString) throws RemoteException {
-            // AIDL 테스트용 메서드 - 실제 기능 없음
-            Log.d(TAG, "basicTypes called with: " + anInt + ", " + aLong + ", " +
-                      aBoolean + ", " + aFloat + ", " + aDouble + ", " + aString);
+            // AIDL 테스트용 메서드
+            Log.d(TAG, "basicTypes 호출됨");
         }
     };
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.i(TAG, "🚀 MessagingService onCreate() 진입"); // 서비스 실행 확인용
+        Log.i(TAG, "🚀 MessagingService 시작");
 
         // MQTT 클라이언트 초기화
         mqttClient = MqttClient.builder()
@@ -149,24 +137,25 @@ public class MessagingService extends Service {
                 .serverPort(1883)
                 .buildAsync();
 
-        Log.i(TAG, "MQTT 클라이언트 생성됨");
-
+        // MQTT 브로커에 연결
         connectToMqttBroker();
-
-        Log.i(TAG, "🔗 MessagingService 바인딩 준비 완료");
     }
 
     /**
      * MQTT 브로커에 연결
      */
     private void connectToMqttBroker() {
-        mqttClient.connectWith()
-                .send()
+        if (mqttClient == null) {
+            Log.e(TAG, "MQTT 클라이언트가 초기화되지 않았습니다.");
+            return;
+        }
+
+        Log.d(TAG, "🔗 MQTT 브로커 연결 시도 중...");
+
+        mqttClient.connect()
                 .whenComplete((connAck, throwable) -> {
                     if (throwable == null) {
-                        Log.i(TAG, "✅ MQTT 브로커 연결 성공");
-                        // 연결 성공 시 기본 토픽들을 구독
-                        subscribeToDefaultTopics();
+                        Log.i(TAG, "✅ MQTT 브로커 연결 성공!");
                     } else {
                         Log.e(TAG, "❌ MQTT 연결 실패: " + throwable.getMessage());
                     }
@@ -174,11 +163,20 @@ public class MessagingService extends Service {
     }
 
     /**
-     * 기본 토픽들을 구독 (예: "sensor/#", "device/#" 등)
+     * 필터에서 토픽을 추출하여 MQTT 토픽 구독
      */
-    private void subscribeToDefaultTopics() {
-        // 기본적으로 모든 토픽을 구독 (와일드카드 사용)
-        subscribeToMqttTopic("#");
+    private void subscribeToTopicFromFilter(Filter filter) {
+        if (filter == null) {
+            Log.w(TAG, "필터가 null입니다.");
+            return;
+        }
+
+        String topic = filter.getTopic();
+        if (topic != null && !topic.isEmpty()) {
+            subscribeToMqttTopic(topic);
+        } else {
+            Log.w(TAG, "필터에서 유효한 토픽을 찾을 수 없습니다.");
+        }
     }
 
     /**
@@ -208,13 +206,10 @@ public class MessagingService extends Service {
 
                     String topicName = publish.getTopic().toString();
 
-                    Log.d(TAG, "📥 [" + topicName + "] MQTT 메시지 수신: " + new String(payload));
+                    Log.d(TAG, "📥 [" + topicName + "] 메시지 수신: " + new String(payload));
 
                     // Message 객체 생성
                     Message message = createMessageFromMqttPayload(topicName, payload);
-
-                    // 메시지 히스토리에 추가
-                    addToMessageHistory(message);
 
                     // 구독된 클라이언트들에게 메시지 전달
                     deliverMessageToSubscribers(message);
@@ -223,9 +218,9 @@ public class MessagingService extends Service {
                 .whenComplete((subAck, throwable) -> {
                     if (throwable == null) {
                         subscribedMqttTopics.add(topic);
-                        Log.i(TAG, "📡 '" + topic + "' MQTT 토픽 구독 시작");
+                        Log.i(TAG, "📡 '" + topic + "' 토픽 구독 시작");
                     } else {
-                        Log.e(TAG, "❌ '" + topic + "' MQTT 구독 실패: " + throwable.getMessage());
+                        Log.e(TAG, "❌ '" + topic + "' 구독 실패: " + throwable.getMessage());
                     }
                 });
     }
@@ -235,40 +230,59 @@ public class MessagingService extends Service {
      */
     private Message createMessageFromMqttPayload(String topic, byte[] payload) {
         try {
-            Message.Builder builder = new Message.Builder(topic)
-                    // .setTopic(topic)
-                    .setPayload(payload);
-
-            return builder.build();     // build 작성
+            return new Message.Builder(topic)
+                    .setPayload(payload)
+                    .build();
         } catch (Exception e) {
             Log.e(TAG, "Message 객체 생성 실패", e);
-            // 기본 Message 객체 반환
             return new Message.Builder(topic)
-                    //.setTopic(topic) -> setTpoic은 Filter.Builder에서만 사용
                     .setPayload(payload != null ? payload : new byte[0])
                     .build();
         }
     }
 
     /**
-     * 클라이언트 필터에 따라 MQTT 토픽 구독 업데이트
+     * 현재 구독자들이 필요로 하는 토픽들만 유지하도록 MQTT 구독 업데이트
      */
     private void updateMqttTopicSubscriptions() {
-        // 현재는 모든 토픽을 구독하고 있으므로 별도 업데이트 불필요
-        // 실제 구현에서는 클라이언트 필터에 따라 특정 토픽만 구독할 수 있음
-        Log.d(TAG, "MQTT 토픽 구독 상태 업데이트 완료");
+        // 현재 필요한 토픽들 수집
+        Set<String> requiredTopics = new CopyOnWriteArraySet<>();
+        for (ClientInfo clientInfo : subscribedClients.values()) {
+            String topic = clientInfo.filter.getTopic();
+            if (topic != null && !topic.isEmpty()) {
+                requiredTopics.add(topic);
+            }
+        }
+
+        // 불필요한 토픽 구독 해제
+        for (String subscribedTopic : subscribedMqttTopics) {
+            if (!requiredTopics.contains(subscribedTopic)) {
+                unsubscribeFromMqttTopic(subscribedTopic);
+            }
+        }
+
+        Log.d(TAG, "MQTT 토픽 구독 업데이트 완료");
     }
 
     /**
-     * 메시지를 히스토리에 추가
+     * MQTT 토픽 구독 해제
      */
-    private void addToMessageHistory(Message message) {
-        messageHistory.add(message);
-
-        // 최대 크기 초과 시 오래된 메시지 제거
-        while (messageHistory.size() > MAX_MESSAGE_HISTORY) {
-            messageHistory.remove(0);
+    private void unsubscribeFromMqttTopic(String topic) {
+        if (mqttClient == null || mqttClient.getState() != MqttClientState.CONNECTED) {
+            return;
         }
+
+        mqttClient.unsubscribeWith()
+                .topicFilter(topic)
+                .send()
+                .whenComplete((unsuback, throwable) -> {
+                    if (throwable == null) {
+                        subscribedMqttTopics.remove(topic);
+                        Log.i(TAG, "📡 '" + topic + "' 토픽 구독 해제");
+                    } else {
+                        Log.e(TAG, "❌ '" + topic + "' 구독 해제 실패: " + throwable.getMessage());
+                    }
+                });
     }
 
     /**
@@ -285,64 +299,29 @@ public class MessagingService extends Service {
         for (Map.Entry<Integer, ClientInfo> entry : subscribedClients.entrySet()) {
             ClientInfo clientInfo = entry.getValue();
             try {
-                // 필터 조건 확인
-                if (shouldDeliverMessage(message, clientInfo.filter)) {
-                    // IMessageListener 콜백을 통해 메시지 전달
+                // 간단한 토픽 매칭만 수행 (브로커가 이미 필터링했음)
+                if (isTopicMatch(message.getTopic(), clientInfo.filter.getTopic())) {
                     clientInfo.listener.onMessage(message);
                     Log.v(TAG, "✅ 메시지 전달 완료: " + clientInfo.packageName);
-                } else {
-                    Log.v(TAG, "🔍 필터 조건에 맞지 않아 메시지 전달 건너뜀: " + clientInfo.packageName);
                 }
             } catch (RemoteException e) {
                 Log.e(TAG, "❌ 클라이언트에게 메시지 전달 실패: " + clientInfo.packageName, e);
                 // 연결이 끊어진 클라이언트는 제거
                 subscribedClients.remove(entry.getKey());
             } catch (Exception e) {
-                Log.e(TAG, "❌ 메시지 전달 중 예외 발생: " + clientInfo.packageName, e);
+                Log.e(TAG, "메시지 전달 중 예외 발생", e);
             }
         }
     }
 
     /**
-     * 필터 조건에 따라 메시지 전달 여부 결정
+     * 간단한 토픽 매칭 (정확한 매칭만)
      */
-    private boolean shouldDeliverMessage(Message message, Filter filter) {
-        if (filter == null) {
-            return true; // 필터가 없으면 모든 메시지 전달
+    private boolean isTopicMatch(String messageTopic, String filterTopic) {
+        if (messageTopic == null || filterTopic == null) {
+            return false;
         }
-
-        try {
-            // Filter 클래스의 메서드를 사용해 필터링 로직 구현
-            // 실제 구현은 Filter 클래스의 API에 따라 달라질 수 있음
-            return true; // 임시로 모든 메시지 허용
-        } catch (Exception e) {
-            Log.e(TAG, "필터 검사 중 오류 발생", e);
-            return false; // 오류 발생 시 메시지 전달하지 않음
-        }
-    }
-
-    /**
-     * 새 구독자에게 메시지 히스토리 전달
-     */
-    private void deliverHistoryToNewSubscriber(ClientInfo clientInfo) {
-        if (messageHistory.isEmpty()) {
-            return;
-        }
-
-        Log.d(TAG, "📜 " + messageHistory.size() + "개의 히스토리 메시지를 새 구독자에게 전달: " + clientInfo.packageName);
-
-        for (Message historicalMessage : messageHistory) {
-            try {
-                if (shouldDeliverMessage(historicalMessage, clientInfo.filter)) {
-                    clientInfo.listener.onMessage(historicalMessage);
-                }
-            } catch (RemoteException e) {
-                Log.e(TAG, "히스토리 메시지 전달 실패: " + clientInfo.packageName, e);
-                break; // 연결 문제가 있으면 중단
-            } catch (Exception e) {
-                Log.e(TAG, "히스토리 메시지 전달 중 예외: " + clientInfo.packageName, e);
-            }
-        }
+        return messageTopic.equals(filterTopic);
     }
 
     /**
@@ -350,13 +329,6 @@ public class MessagingService extends Service {
      */
     public int getSubscriberCount() {
         return subscribedClients.size();
-    }
-
-    /**
-     * 메시지 히스토리 크기 반환 (디버깅용)
-     */
-    public int getMessageHistorySize() {
-        return messageHistory.size();
     }
 
     @Override
@@ -417,7 +389,6 @@ public class MessagingService extends Service {
 
         // 리소스 정리
         subscribedClients.clear();
-        messageHistory.clear();
         subscribedMqttTopics.clear();
     }
 
