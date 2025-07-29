@@ -31,7 +31,6 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * Filter class for MQTT topic subscription.
- * 이 클래스는 MQTT 토픽 구독을 위한 필터를 제공합니다.
  *
  * Simplified version that only handles MQTT topic filtering for standard subscriber functionality.
  */

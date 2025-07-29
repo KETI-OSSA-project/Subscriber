@@ -32,12 +32,8 @@ public class Constants {
     public static final String MESSAGING_SERVICE = ".MessagingService";
 
     // 권한 정의
-    public static final String MESSAGE_PUBLISH_PERMISSION = "com.example.permission.MESSAGE_PUBLISH";
     public static final String MESSAGE_SUBSCRIBE_PERMISSION = "com.example.permission.MESSAGE_SUBSCRIBE";
     // public static final String USE_MESSAGE_PORTS_PERMISSION = "com.example.permission.USE_MESSAGE_PORTS";
     // public static final String USE_MESSAGE_PORT_GROUPS_PERMISSION = "com.example.permission.USE_MESSAGE_PORT_GROUPS";
 
-    private Constants() {
-        // Utility class - no instantiation
-    }
 }
