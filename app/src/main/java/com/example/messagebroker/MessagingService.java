@@ -38,6 +38,12 @@ public class MessagingService extends Service {
     // 현재 구독 중인 MQTT 토픽들
     private final Set<String> subscribedMqttTopics = new CopyOnWriteArraySet<>();
 
+    // 연결 대기 중인 구독 요청 토픽들
+    private final Set<String> pendingMqttTopics = new CopyOnWriteArraySet<>();
+
+    // 연결 완료 후 처리할 지연된 구독 요청들
+    private final Set<String> pendingSubscriptionsAfterConnect = new CopyOnWriteArraySet<>();
+
     /**
      * 클라이언트 정보를 담는 내부 클래스
      */
@@ -151,6 +157,9 @@ public class MessagingService extends Service {
                 .whenComplete((connAck, throwable) -> {
                     if (throwable == null) {
                         Log.i(TAG, "✅ MQTT 브로커 연결 성공!");
+
+                        // 지연된 구독 요청 처리
+                        processPendingSubscriptions();
                     } else {
                         Log.e(TAG, "❌ MQTT 연결 실패: " + throwable.getMessage());
                     }
@@ -175,18 +184,59 @@ public class MessagingService extends Service {
     }
 
     /**
-     * MQTT 토픽 구독
+     * 연결 완료 후 지연된 구독 요청들 처리
      */
-    private void subscribeToMqttTopic(String topic) {
-        if (mqttClient == null || mqttClient.getState() != MqttClientState.CONNECTED) {
-            Log.w(TAG, "MQTT 클라이언트가 연결되지 않았습니다.");
+    private void processPendingSubscriptions() {
+        if (pendingSubscriptionsAfterConnect.isEmpty()) {
+            Log.d(TAG, "지연된 구독 요청이 없습니다.");
             return;
         }
 
-        if (subscribedMqttTopics.contains(topic)) {
-            Log.d(TAG, "이미 구독 중인 토픽: " + topic);
+        Log.d(TAG, "지연된 구독 요청 " + pendingSubscriptionsAfterConnect.size() + "개 처리 중...");
+
+        for (String topic : pendingSubscriptionsAfterConnect) {
+            Log.d(TAG, "지연된 구독 처리: " + topic);
+            subscribeToMqttTopicDirectly(topic);
+        }
+
+        pendingSubscriptionsAfterConnect.clear();
+    }
+
+    /**
+     * MQTT 토픽 구독 (연결 상태 대기 포함)
+     */
+    private void subscribeToMqttTopic(String topic) {
+        // 이미 구독 중이거나 구독 진행 중인 토픽인지 확인
+        if (subscribedMqttTopics.contains(topic) || pendingMqttTopics.contains(topic)) {
+            Log.d(TAG, "이미 구독 중이거나 구독 진행 중인 토픽: " + topic);
             return;
         }
+
+        // 대기열에도 있는지 확인
+        if (pendingSubscriptionsAfterConnect.contains(topic)) {
+            Log.d(TAG, "이미 연결 대기 중인 토픽: " + topic);
+            return;
+        }
+
+        // MQTT 클라이언트 연결 상태 확인
+        if (mqttClient == null || mqttClient.getState() != MqttClientState.CONNECTED) {
+            Log.w(TAG, "MQTT 클라이언트가 연결되지 않았습니다. 연결 완료 후 구독 예정: " + topic);
+            pendingSubscriptionsAfterConnect.add(topic);
+            return;
+        }
+
+        // 연결된 상태에서 즉시 구독
+        subscribeToMqttTopicDirectly(topic);
+    }
+
+    /**
+     * MQTT 토픽에 직접 구독 (연결 상태 확인 완료 후)
+     */
+    private void subscribeToMqttTopicDirectly(String topic) {
+        Log.d(TAG, "🔄 [" + topic + "] 구독 요청 중...");
+
+        // 구독 진행 중 상태로 표시
+        pendingMqttTopics.add(topic);
 
         mqttClient.subscribeWith()
                 .topicFilter(topic)
@@ -201,7 +251,7 @@ public class MessagingService extends Service {
 
                     String topicName = publish.getTopic().toString();
 
-                    Log.d(TAG, "📥 [" + topicName + "] 메시지 수신: " + new String(payload));
+                    Log.d(TAG, "📥 [" + topicName + "] 수신: " + new String(payload));
 
                     // Message 객체 생성
                     Message message = createMessageFromMqttPayload(topicName, payload);
@@ -211,9 +261,12 @@ public class MessagingService extends Service {
                 })
                 .send()
                 .whenComplete((subAck, throwable) -> {
+                    // 구독 진행 중 상태 해제
+                    pendingMqttTopics.remove(topic);
+
                     if (throwable == null) {
                         subscribedMqttTopics.add(topic);
-                        Log.i(TAG, "📡 '" + topic + "' 토픽 구독 시작");
+                        Log.d(TAG, "✅ [" + topic + "] 구독 성공");
                     } else {
                         Log.e(TAG, "❌ '" + topic + "' 구독 실패: " + throwable.getMessage());
                     }
