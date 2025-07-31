@@ -161,8 +161,20 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> logMessage("⚠️ MessagingService 연결이 끊어졌습니다"));
                         }
                     };
+            // 연결 리스너 설정
             messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
             runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 요청 중..."));
+            if (messagingManager.isConnected()) {
+                // 직접 수동으로 구독하기
+                boolean result = messagingManager.subscribe(currentMessageListener, currentFilter);
+                if (result) {
+                    logMessage("✅ [" + topic + "] 구독 성공");
+                } else {
+                    logMessage("❌ [" + topic + "] 구독 실패");
+                }
+            } else {
+                logMessage("🔄 [" + topic + "] 연결 대기 중...");
+            }
         } catch (Exception e) {
             runOnUiThread(() -> logMessage("❌ subscribeTo 전체 예외: " + e.getMessage()));
         }

@@ -57,6 +57,11 @@ public class MessagingManager implements AutoCloseable {
         return new MessagingManager(context);
     }
 
+    public boolean isConnected() {
+        IMessagingService service = serviceHelper.get();
+        return service != null;
+    }
+
     public void setMessagingServiceConnectionListener(
             @Nullable MessagingServiceConnectionListener listener, @Nullable Handler handler) {
         serviceHelper.setExternalConnectionListener(buildConnectionListener(listener), handler);
