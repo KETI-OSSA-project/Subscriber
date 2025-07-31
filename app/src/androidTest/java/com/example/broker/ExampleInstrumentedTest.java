@@ -1,4 +1,4 @@
-package com.example.subscriber;
+package com.example.broker;
 
 import android.content.Context;
 

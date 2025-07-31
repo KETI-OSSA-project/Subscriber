@@ -6,29 +6,30 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
-import com.example.messagebroker.Filter;
-import com.example.messagebroker.MessagingManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.hivemq.client.mqtt.MqttClient;
-import com.hivemq.client.mqtt.datatypes.MqttQos;
-import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
+import com.example.broker.Filter;
+import com.example.broker.Message;
+import com.example.broker.MessagingManager;
 
-import java.nio.ByteBuffer;
-import java.util.Optional;
+import com.example.broker.R;
 
 public class MainActivity extends AppCompatActivity {
 
-    // 에뮬레이터 연동 시: 공유기 ip 주소 -> 이더넷 말고 공유
-    private final String brokerHost = "192.168.0.8";
-    private final int brokerPort = 1883;
-
     private EditText inputTopic;
     private Button subscribeButton;
+    private Button unsubscribeButton;
     private TextView messageView;
 
-    private Mqtt3AsyncClient mqttClient;
+    // 표준 API 준수를 위한 멤버 변수들
+    private MessagingManager messagingManager;
+    private MessagingManager.MessageListener currentMessageListener;
+    private Filter currentFilter;
+
+    // 브로커 패키지명 및 서비스명 직접 상수로 선언 (MessagingManager.Constants 사용)
+    private static final String MESSAGE_BROKER_PACKAGE = MessagingManager.Constants.MESSAGE_BROKER_PACKAGE;
+    private static final String MESSAGING_SERVICE = MessagingManager.Constants.MESSAGING_SERVICE;
 
     // MQTT 클라이언트 초기화 및 UI 이벤트 설정하는 함수
     @Override
@@ -36,99 +37,173 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Log.i("MQTT", "🚀 Subscriber 앱 시작됨");
+
         inputTopic = findViewById(R.id.inputTopic);
         subscribeButton = findViewById(R.id.subscribeButton);
+        unsubscribeButton = findViewById(R.id.unsubscribeButton);
         messageView = findViewById(R.id.messageView);
 
-        setupMqttClient();
+        Log.d("MQTT", "📱 UI 컴포넌트 초기화 완료");
+
+        // 화면에 시작 메시지 표시
+        logMessage("🚀 Subscriber 앱이 시작되었습니다");
+        logMessage("📱 Android 브로커와 연결 준비 중...");
+
+        // MessagingManager 초기화 및 연결 상태 확인
+        initializeMessagingManager();
 
         subscribeButton.setOnClickListener(v -> {
             String topic = inputTopic.getText().toString().trim();
+            Log.d("MQTT", "🔘 구독 버튼 클릭: 토픽=" + topic);
             if (topic.isEmpty()) {
                 Toast.makeText(this, "토픽을 입력해주세요", Toast.LENGTH_SHORT).show();
+                Log.w("MQTT", "⚠️ 빈 토픽으로 구독 시도");
             } else {
                 subscribeTo(topic);
             }
         });
+
+        unsubscribeButton.setOnClickListener(v -> {
+            String topic = inputTopic.getText().toString().trim();
+            Log.d("MQTT", "🔘 구독 해제 버튼 클릭: 토픽=" + topic);
+            if (topic.isEmpty()) {
+                Toast.makeText(this, "토픽을 입력해주세요", Toast.LENGTH_SHORT).show();
+                Log.w("MQTT", "⚠️ 빈 토픽으로 구독 해제 시도");
+            } else {
+                unsubscribeFrom(topic);
+            }
+        });
+
+        Log.i("MQTT", "✅ onCreate() 완료");
     }
 
-    // HiveMQ MQTT 클라이언트를 초기화하고 브로커에 연결하는 함수
-    private void setupMqttClient() {
-        mqttClient = MqttClient.builder()
-                .useMqttVersion3()
-                .identifier("android-subscriber-" + System.currentTimeMillis())
-                .serverHost(brokerHost)
-                .serverPort(brokerPort)
-                .buildAsync();
+    // MessagingManager 초기화 및 연결 상태 확인
+    private void initializeMessagingManager() {
+        Log.d("MQTT", "🔧 MessagingManager 초기화 중...");
+        logMessage("🔧 브로커 서비스 바인딩 시도: " + MESSAGE_BROKER_PACKAGE + "/" + MESSAGING_SERVICE);
+        try {
+            messagingManager = MessagingManager.getMessagingManager(this);
+            Log.d("MQTT", "✅ MessagingManager 생성 완료");
+            logMessage("✅ MessagingManager 인스턴스 생성 완료");
 
-        mqttClient.connectWith().send().whenComplete((connAck, throwable) -> {
-            runOnUiThread(() -> {
-                if (throwable == null) {
-                    logMessage("✅ MQTT 브로커 연결 성공");
-                } else {
-                    logMessage("❌ MQTT 연결 실패: " + throwable.getMessage());
-                }
-            });
-        });
+            // 연결 리스너 설정하여 연결 상태 모니터링
+            MessagingManager.MessagingServiceConnectionListener initialConnectionListener =
+                    new MessagingManager.MessagingServiceConnectionListener() {
+                        @Override
+                        public void onConnected() {
+                            runOnUiThread(() -> {
+                                logMessage("✅ Android 브로커 연결 완료!");
+                                Log.i("MQTT", "🔗 MessagingService 연결됨");
+                            });
+                        }
+
+                        @Override
+                        public void onDisconnected() {
+                            runOnUiThread(() -> {
+                                logMessage("❌ 브로커 서비스 바인딩 실패 또는 연결 끊김");
+                                logMessage("💡 브로커 앱(" + MESSAGE_BROKER_PACKAGE + ")이 설치되어 있고, 서비스가 exported=true인지 확인하세요");
+                                Log.w("MQTT", "❌ MessagingService 연결 실패 - 브로커 앱이 설치되지 않았거나 서비스가 exported=false일 수 있습니다");
+                            });
+                        }
+                    };
+
+            // 초기 연결 리스너 설정
+            messagingManager.setMessagingServiceConnectionListener(initialConnectionListener, null);
+            Log.d("MQTT", "📡 연결 리스너 설정 완료");
+            logMessage("📡 브로커 서비스 연결 리스너 등록 완료");
+        } catch (Exception e) {
+            Log.e("MQTT", "MessagingManager 초기화 중 오류 발생", e);
+            logMessage("❌ 브로커 서비스 초기화 중 예외 발생: " + e.getMessage());
+            logMessage("💡 브로커 앱이 설치되어 있고, 서비스가 exported=true인지 확인하세요");
+        }
     }
 
     // api 표준화 대상
     // 주어진 토픽을 MQTT 브로커에 구독 요청하는 함수
     private void subscribeTo(String topic) {
-        MessagingManager messagingManager = MessagingManager.getMessagingManager(this);
-        Filter filter = new Filter.Builder().setTopic(topic).build();
-        MessagingManager.MessageListener client = new MessagingManager.MessageListener() {
-            @Override
-            public void onMessage(com.example.messagebroker.Message message) {
-                byte[] payloadBytes = message.getPayload();
-                String payload = payloadBytes != null ? new String(payloadBytes) : "";
-                // 화면 UI에 메시지 출력 -> 로그 X
-                runOnUiThread(() -> {
-                    logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload);
-                });
-            }
-        };
+        try {
+            currentFilter = new Filter.Builder().setTopic(topic).build();
+            currentMessageListener = new MessagingManager.MessageListener() {
+                @Override
+                public void onMessage(Message message) {
+                    byte[] payloadBytes = message.getPayload();
+                    String payload = payloadBytes != null ? new String(payloadBytes) : "";
+                    runOnUiThread(() -> logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload));
+                }
+            };
 
-        // 연결 리스너를 설정하여 서비스 연결 후에 subscribe 호출
-        MessagingManager.MessagingServiceConnectionListener connectionListener =
-                new MessagingManager.MessagingServiceConnectionListener() {
-                    @Override
-                    public void onConnected() {
-                        // 서비스 연결 완료 후 subscribe 호출
-                        boolean result = false;
-                        try {
-                            result = messagingManager.subscribe(client, filter);
-                        } catch (com.example.messagebroker.MessageListenerException e) {
-                            runOnUiThread(() -> {
-                                logMessage("❌ 구독 중 예외 발생: " + e.getMessage());
-                            });
-                            return;
-                        }
-
-                        final boolean subscribeResult = result;
-                        runOnUiThread(() -> {
-                            if (subscribeResult) {
-                                logMessage("✅ [" + topic + "] 구독 성공");
-                            } else {
-                                logMessage("❌ [" + topic + "] 구독 실패");
+            MessagingManager.MessagingServiceConnectionListener connectionListener =
+                    new MessagingManager.MessagingServiceConnectionListener() {
+                        @Override
+                        public void onConnected() {
+                            boolean result = false;
+                            Exception subscribeException = null;
+                            try {
+                                result = messagingManager.subscribe(currentMessageListener, currentFilter);
+                            } catch (Exception e) {
+                                subscribeException = e;
                             }
-                        });
-                    }
+                            final boolean subscribeResult = result;
+                            final Exception finalException = subscribeException;
+                            runOnUiThread(() -> {
+                                if (finalException != null) {
+                                    logMessage("❌ 구독 중 예외 발생: " + finalException.getMessage());
+                                } else if (subscribeResult) {
+                                    logMessage("✅ [" + topic + "] 구독 성공");
+                                } else {
+                                    logMessage("❌ [" + topic + "] 구독 실패");
+                                }
+                            });
+                        }
+                        @Override
+                        public void onDisconnected() {
+                            runOnUiThread(() -> logMessage("⚠️ MessagingService 연결이 끊어졌습니다"));
+                        }
+                    };
+            messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
+            runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 요청 중..."));
+        } catch (Exception e) {
+            runOnUiThread(() -> logMessage("❌ subscribeTo 전체 예외: " + e.getMessage()));
+        }
+    }
 
-                    @Override
-                    public void onDisconnected() {
-                        runOnUiThread(() -> {
-                            logMessage("⚠️ MessagingService 연결이 끊어졌습니다");
-                        });
-                    }
-                };
-
-        // 연결 리스너 설정
-        messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
-
-        runOnUiThread(() -> {
-            logMessage("🔄 [" + topic + "] 구독 요청 중...");
-        });
+    // 주어진 토픽에 대한 MQTT 브로커의 구독을 해제하는 함수
+    private void unsubscribeFrom(String topic) {
+        try {
+            MessagingManager.MessagingServiceConnectionListener connectionListener =
+                    new MessagingManager.MessagingServiceConnectionListener() {
+                        @Override
+                        public void onConnected() {
+                            boolean result = false;
+                            Exception unsubscribeException = null;
+                            try {
+                                result = messagingManager.unsubscribe(currentMessageListener, currentFilter);
+                            } catch (Exception e) {
+                                unsubscribeException = e;
+                            }
+                            final boolean unsubscribeResult = result;
+                            final Exception finalException = unsubscribeException;
+                            runOnUiThread(() -> {
+                                if (finalException != null) {
+                                    logMessage("❌ 구독 해제 중 예외 발생: " + finalException.getMessage());
+                                } else if (unsubscribeResult) {
+                                    logMessage("✅ [" + topic + "] 구독 해제 성공");
+                                } else {
+                                    logMessage("❌ [" + topic + "] 구독 해제 실패");
+                                }
+                            });
+                        }
+                        @Override
+                        public void onDisconnected() {
+                            runOnUiThread(() -> logMessage("⚠️ MessagingService 연결이 끊어졌습니다"));
+                        }
+                    };
+            messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
+            runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 해제 요청 중..."));
+        } catch (Exception e) {
+            runOnUiThread(() -> logMessage("❌ unsubscribeFrom 전체 예외: " + e.getMessage()));
+        }
     }
 
     // 로그를 UI에 출력하는 함수
