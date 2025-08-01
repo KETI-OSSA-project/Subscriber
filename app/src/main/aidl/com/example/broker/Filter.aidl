@@ -1,5 +1,5 @@
 // Filter.aidl
-package com.example.messagebroker;
+package com.example.broker;
 
 parcelable Filter;
 

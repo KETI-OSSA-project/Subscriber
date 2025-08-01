@@ -2,16 +2,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="com.example.permission.MESSAGE_SUBSCRIBE" />
-
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="com.example.permission.BIND_MESSAGING_SERVICE" />
+
+    <queries>
+        <package android:name="com.example.broker"/>
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -24,7 +26,7 @@
         android:theme="@style/Theme.Subscriber"
         tools:targetApi="31">
         <activity
-            android:name=".MainActivity"
+            android:name="com.example.subscriber.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -33,15 +35,6 @@
             </intent-filter>
         </activity>
 
-        <!-- MessagingService 등록 -->
-        <service
-            android:name="com.example.messagebroker.MessagingService"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.example.messagebroker.MessagingService" />
-            </intent-filter>
-        </service>
 
     </application>
 

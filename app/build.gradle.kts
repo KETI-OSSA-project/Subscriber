@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.subscriber"
+    namespace = "com.example.broker"
     compileSdk = 35
 
     defaultConfig {
