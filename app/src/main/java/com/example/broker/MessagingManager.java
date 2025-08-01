@@ -12,9 +12,8 @@ import androidx.annotation.RequiresPermission;
 import android.util.Log;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import com.example.broker.IMessagingService;
-//import com.example.broker.Message;
-//import com.example.broker.Filter;
 import static com.example.broker.MessagingManager.Constants.MESSAGE_BROKER_PACKAGE;
 import static com.example.broker.MessagingManager.Constants.MESSAGING_SERVICE;
 import static java.util.Objects.requireNonNull;
@@ -27,6 +26,9 @@ public class MessagingManager implements AutoCloseable {
     private final UUID sessionId = UUID.randomUUID();
     private final String applicationId;
     private final String applicationPackageName;
+
+    // MessageListener -> Stub 캐싱용 맵 추가
+    private final ConcurrentHashMap<MessageListener, IMessageListener.Stub> stubMap = new ConcurrentHashMap<>();
 
     private MessagingManager(@NonNull Context context) {
         Objects.requireNonNull(context);
@@ -99,12 +101,20 @@ public class MessagingManager implements AutoCloseable {
             throw new RuntimeException("MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
         }
         try {
-            IMessageListener.Stub messageListener = createMessageListenerProxy(client, handler);
-            // Filter 객체를 그대로 전달
+            IMessageListener.Stub messageListener = getOrCreateStub(client, handler);
             return service.subscribe(messageListener, filter);
         } catch (RemoteException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private IMessageListener.Stub getOrCreateStub(MessageListener messageListener, Handler handler) {
+        IMessageListener.Stub stub = stubMap.get(messageListener);
+        if (stub == null) {
+            stub = createMessageListenerProxy(messageListener, handler);
+            stubMap.put(messageListener, stub);
+        }
+        return stub;
     }
 
     private IMessageListener.Stub createMessageListenerProxy(MessageListener messageListener, Handler handler) {
@@ -127,8 +137,7 @@ public class MessagingManager implements AutoCloseable {
             throw new RuntimeException("MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
         }
         try {
-            IMessageListener.Stub messageListener = createMessageListenerProxy(client, null);
-            // Filter 객체를 넘기지 않고, 전체 구독 해제만 지원하므로 client만 넘김
+            IMessageListener.Stub messageListener = getOrCreateStub(client, null);
             return service.unsubscribe(messageListener, filter);
         } catch (RemoteException e) {
             throw new RuntimeException(e);
@@ -140,7 +149,7 @@ public class MessagingManager implements AutoCloseable {
     public boolean unsubscribeAll(@NonNull MessageListener client) {
         Objects.requireNonNull(client);
         try {
-            IMessageListener.Stub messageListener = createMessageListenerProxy(client, null);
+            IMessageListener.Stub messageListener = getOrCreateStub(client, null);
             return serviceHelper.get().unsubscribeAll(messageListener);
         } catch (RemoteException e) {
             throw new RuntimeException(e);

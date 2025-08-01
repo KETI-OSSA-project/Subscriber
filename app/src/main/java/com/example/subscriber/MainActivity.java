@@ -15,6 +15,9 @@ import com.example.broker.MessagingManager;
 
 import com.example.broker.R;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class MainActivity extends AppCompatActivity {
 
     private EditText inputTopic;
@@ -30,6 +33,10 @@ public class MainActivity extends AppCompatActivity {
     // 브로커 패키지명 및 서비스명 직접 상수로 선언 (MessagingManager.Constants 사용)
     private static final String MESSAGE_BROKER_PACKAGE = MessagingManager.Constants.MESSAGE_BROKER_PACKAGE;
     private static final String MESSAGING_SERVICE = MessagingManager.Constants.MESSAGING_SERVICE;
+
+    // 토픽별 리스너/필터 저장용 맵
+    private final Map<String, MessagingManager.MessageListener> listenerMap = new HashMap<>();
+    private final Map<String, Filter> filterMap = new HashMap<>();
 
     // MQTT 클라이언트 초기화 및 UI 이벤트 설정하는 함수
     @Override
@@ -123,16 +130,25 @@ public class MainActivity extends AppCompatActivity {
     // 주어진 토픽을 MQTT 브로커에 구독 요청하는 함수
     private void subscribeTo(String topic) {
         try {
-            currentFilter = new Filter.Builder().setTopic(topic).build();
-            currentMessageListener = new MessagingManager.MessageListener() {
-                @Override
-                public void onMessage(Message message) {
-                    byte[] payloadBytes = message.getPayload();
-                    String payload = payloadBytes != null ? new String(payloadBytes) : "";
-                    runOnUiThread(() -> logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload));
-                }
-            };
-
+            // 이미 리스너가 있으면 재사용
+            MessagingManager.MessageListener messageListener = listenerMap.get(topic);
+            Filter filter = filterMap.get(topic);
+            if (messageListener == null || filter == null) {
+                filter = new Filter.Builder().setTopic(topic).build();
+                messageListener = new MessagingManager.MessageListener() {
+                    @Override
+                    public void onMessage(Message message) {
+                        byte[] payloadBytes = message.getPayload();
+                        String payload = payloadBytes != null ? new String(payloadBytes) : "";
+                        runOnUiThread(() -> logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload));
+                    }
+                };
+                // 맵에 저장
+                listenerMap.put(topic, messageListener);
+                filterMap.put(topic, filter);
+            }
+            final MessagingManager.MessageListener finalMessageListener = messageListener;
+            final Filter finalFilter = filter;
             MessagingManager.MessagingServiceConnectionListener connectionListener =
                     new MessagingManager.MessagingServiceConnectionListener() {
                         @Override
@@ -140,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
                             boolean result = false;
                             Exception subscribeException = null;
                             try {
-                                result = messagingManager.subscribe(currentMessageListener, currentFilter);
+                                result = messagingManager.subscribe(finalMessageListener, finalFilter);
                             } catch (Exception e) {
                                 subscribeException = e;
                             }
@@ -166,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 요청 중..."));
             if (messagingManager.isConnected()) {
                 // 직접 수동으로 구독하기
-                boolean result = messagingManager.subscribe(currentMessageListener, currentFilter);
+                boolean result = messagingManager.subscribe(messageListener, filter);
                 if (result) {
                     logMessage("✅ [" + topic + "] 구독 성공");
                 } else {
@@ -183,36 +199,22 @@ public class MainActivity extends AppCompatActivity {
     // 주어진 토픽에 대한 MQTT 브로커의 구독을 해제하는 함수
     private void unsubscribeFrom(String topic) {
         try {
-            MessagingManager.MessagingServiceConnectionListener connectionListener =
-                    new MessagingManager.MessagingServiceConnectionListener() {
-                        @Override
-                        public void onConnected() {
-                            boolean result = false;
-                            Exception unsubscribeException = null;
-                            try {
-                                result = messagingManager.unsubscribe(currentMessageListener, currentFilter);
-                            } catch (Exception e) {
-                                unsubscribeException = e;
-                            }
-                            final boolean unsubscribeResult = result;
-                            final Exception finalException = unsubscribeException;
-                            runOnUiThread(() -> {
-                                if (finalException != null) {
-                                    logMessage("❌ 구독 해제 중 예외 발생: " + finalException.getMessage());
-                                } else if (unsubscribeResult) {
-                                    logMessage("✅ [" + topic + "] 구독 해제 성공");
-                                } else {
-                                    logMessage("❌ [" + topic + "] 구독 해제 실패");
-                                }
-                            });
-                        }
-                        @Override
-                        public void onDisconnected() {
-                            runOnUiThread(() -> logMessage("⚠️ MessagingService 연결이 끊어졌습니다"));
-                        }
-                    };
-            messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
             runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 해제 요청 중..."));
+            MessagingManager.MessageListener messageListener = listenerMap.get(topic);
+            Filter filter = filterMap.get(topic);
+            if (messageListener == null || filter == null) {
+                logMessage("❌ [" + topic + "] 구독 해제 실패: 해당 토픽에 대한 구독 정보 없음");
+                return;
+            }
+            boolean result = messagingManager.unsubscribe(messageListener, filter);
+            if (result) {
+                logMessage("✅ [" + topic + "] 구독 해제 성공");
+                // 맵에서 제거
+                listenerMap.remove(topic);
+                filterMap.remove(topic);
+            } else {
+                logMessage("❌ [" + topic + "] 구독 해제 실패");
+            }
         } catch (Exception e) {
             runOnUiThread(() -> logMessage("❌ unsubscribeFrom 전체 예외: " + e.getMessage()));
         }
