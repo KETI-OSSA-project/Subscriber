@@ -89,8 +89,3 @@ subscriber_java/
   * Gateway Downlink 규칙과 일치하는지 확인 (외부 메시지의 경우)
 * **중복 수신**: 중복 구독 방지 확인
 * **연결 실패**: 내부 Broker URL 및 네트워크 상태 확인
-
----
----
-
-👉 이제 Gateway, Publisher, Subscriber까지 다 정리했네요. 정수인님, 다음은 **Broker 레포 README**를 작성해드릴까요?
