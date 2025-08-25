@@ -256,12 +256,14 @@ public class MessagingManager implements AutoCloseable {
                 notifyExternalDisconnected();
             }
         };
+
+        // 바인딩 관리자
         private BoundServiceHelper(@NonNull Context context, @Nullable ComponentName serviceComponent, @Nullable String action, @NonNull BinderConverter<T> binderConverter) {
             this.context = context.getApplicationContext();
             this.serviceComponent = serviceComponent;
             this.binderConverter = binderConverter;
             if (action != null) {
-                bindServiceWithAction(action);
+                bindServiceWithAction(action); // binding with action
             } else {
                 bindService();
             }
@@ -286,6 +288,7 @@ public class MessagingManager implements AutoCloseable {
                 notifyExternalDisconnected();
             }
         }
+        // binding
         public void bindServiceWithAction(String action) {
             try {
                 android.content.Intent intent = new android.content.Intent();

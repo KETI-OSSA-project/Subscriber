@@ -25,26 +25,22 @@ public class MainActivity extends AppCompatActivity {
     private Button unsubscribeButton;
     private TextView messageView;
 
-    // 표준 API 준수를 위한 멤버 변수들
     private MessagingManager messagingManager;
     private MessagingManager.MessageListener currentMessageListener;
     private Filter currentFilter;
 
-    // 브로커 패키지명 및 서비스명 직접 상수로 선언 (MessagingManager.Constants 사용)
     private static final String MESSAGE_BROKER_PACKAGE = MessagingManager.Constants.MESSAGE_BROKER_PACKAGE;
     private static final String MESSAGING_SERVICE = MessagingManager.Constants.MESSAGING_SERVICE;
 
-    // 토픽별 리스너/필터 저장용 맵
     private final Map<String, MessagingManager.MessageListener> listenerMap = new HashMap<>();
     private final Map<String, Filter> filterMap = new HashMap<>();
 
-    // MQTT 클라이언트 초기화 및 UI 이벤트 설정하는 함수
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Log.i("MQTT", "🚀 Subscriber 앱 시작됨");
+        Log.i("Android", "🚀 Subscriber 앱 시작됨");
 
         inputTopic = findViewById(R.id.inputTopic);
         subscribeButton = findViewById(R.id.subscribeButton);
@@ -55,17 +51,16 @@ public class MainActivity extends AppCompatActivity {
 
         // 화면에 시작 메시지 표시
         logMessage("🚀 Subscriber 앱이 시작되었습니다");
-        logMessage("📱 Android 브로커와 연결 준비 중...");
 
         // MessagingManager 초기화 및 연결 상태 확인
         initializeMessagingManager();
 
         subscribeButton.setOnClickListener(v -> {
             String topic = inputTopic.getText().toString().trim();
-            Log.d("MQTT", "🔘 구독 버튼 클릭: 토픽=" + topic);
+            Log.d("Android", "🔘 구독 버튼 클릭: 토픽=" + topic);
             if (topic.isEmpty()) {
                 Toast.makeText(this, "토픽을 입력해주세요", Toast.LENGTH_SHORT).show();
-                Log.w("MQTT", "⚠️ 빈 토픽으로 구독 시도");
+                Log.w("Android", "⚠️ 빈 토픽으로 구독 시도");
             } else {
                 subscribeTo(topic);
             }
@@ -81,18 +76,12 @@ public class MainActivity extends AppCompatActivity {
                 unsubscribeFrom(topic);
             }
         });
-
-        Log.i("MQTT", "✅ onCreate() 완료");
     }
 
-    // MessagingManager 초기화 및 연결 상태 확인
+    // MessagingManager 초기화 및 객체 생성
     private void initializeMessagingManager() {
-        Log.d("MQTT", "🔧 MessagingManager 초기화 중...");
-        logMessage("🔧 브로커 서비스 바인딩 시도: " + MESSAGE_BROKER_PACKAGE + "/" + MESSAGING_SERVICE);
         try {
             messagingManager = MessagingManager.getMessagingManager(this);
-            Log.d("MQTT", "✅ MessagingManager 생성 완료");
-            logMessage("✅ MessagingManager 인스턴스 생성 완료");
 
             // 연결 리스너 설정하여 연결 상태 모니터링
             MessagingManager.MessagingServiceConnectionListener initialConnectionListener =
@@ -117,17 +106,12 @@ public class MainActivity extends AppCompatActivity {
 
             // 초기 연결 리스너 설정
             messagingManager.setMessagingServiceConnectionListener(initialConnectionListener, null);
-            Log.d("MQTT", "📡 연결 리스너 설정 완료");
-            logMessage("📡 브로커 서비스 연결 리스너 등록 완료");
         } catch (Exception e) {
-            Log.e("MQTT", "MessagingManager 초기화 중 오류 발생", e);
             logMessage("❌ 브로커 서비스 초기화 중 예외 발생: " + e.getMessage());
-            logMessage("💡 브로커 앱이 설치되어 있고, 서비스가 exported=true인지 확인하세요");
         }
     }
 
-    // api 표준화 대상
-    // 주어진 토픽을 MQTT 브로커에 구독 요청하는 함수
+    // broker로부터 메시지 수신하는 코드
     private void subscribeTo(String topic) {
         try {
             // 이미 리스너가 있으면 재사용
@@ -174,14 +158,14 @@ public class MainActivity extends AppCompatActivity {
                         }
                         @Override
                         public void onDisconnected() {
-                            runOnUiThread(() -> logMessage("⚠️ MessagingService 연결이 끊어졌습니다"));
+                            runOnUiThread(() -> logMessage("⚠️ Android Broker 연결이 끊어졌습니다"));
                         }
                     };
             // 연결 리스너 설정
             messagingManager.setMessagingServiceConnectionListener(connectionListener, null);
             runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 요청 중..."));
             if (messagingManager.isConnected()) {
-                // 직접 수동으로 구독하기
+                // 직접 호출
                 boolean result = messagingManager.subscribe(messageListener, filter);
                 if (result) {
                     logMessage("✅ [" + topic + "] 구독 성공");
@@ -222,7 +206,7 @@ public class MainActivity extends AppCompatActivity {
 
     // 로그를 UI에 출력하는 함수
     private void logMessage(String msg) {
-        Log.d("MQTT", msg);
+        Log.d("Android", msg);
         messageView.append(msg + "\n");
     }
 }
