@@ -40,20 +40,6 @@ public class MessagingManager implements AutoCloseable {
         applicationPackageName = applicationId.replace('.', '/');
     }
 
-    @MainThread
-    @NonNull
-    public static MessagingManager getConnectedInstance(
-            @NonNull Context context, @NonNull MessagingServiceConnectionListener listener) {
-        Objects.requireNonNull(context);
-        Objects.requireNonNull(listener);
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            Log.w(TAG, "getConnectedInstance is not called on the main thread! This may lead to inconsistent behavior.");
-        }
-        MessagingManager manager = new MessagingManager(context);
-        manager.setMessagingServiceConnectionListener(listener, null);
-        return manager;
-    }
-
     @NonNull
     public static MessagingManager getMessagingManager(Context context) {
         return new MessagingManager(context);
@@ -143,69 +129,6 @@ public class MessagingManager implements AutoCloseable {
             throw new RuntimeException(e);
         }
     }
-
-    @SuppressWarnings("checkstyle:javadocmethod")
-    @RequiresPermission(Constants.MESSAGE_SUBSCRIBE_PERMISSION)
-    public boolean unsubscribeAll(@NonNull MessageListener client) {
-        Objects.requireNonNull(client);
-        try {
-            IMessageListener.Stub messageListener = getOrCreateStub(client, null);
-            return serviceHelper.get().unsubscribeAll(messageListener);
-        } catch (RemoteException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void disconnect() {
-        close();
-    }
-
-    public boolean publish(@NonNull Message message) {
-        Objects.requireNonNull(message);
-        IMessagingService service = serviceHelper.get();
-        if (service == null) {
-            throw new RuntimeException("MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
-        }
-        try {
-            service.publish(message);
-            return true;
-        } catch (RemoteException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    // port api는 구현하지 않음
-//    public InPort createInPort(@NonNull PortConfiguration inPortConfiguration) {
-//        Objects.requireNonNull(inPortConfiguration);
-//        IMessagingService service = serviceHelper.get();
-//        if (service == null) {
-//            throw new RuntimeException("MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
-//        }
-//        try {
-//            // 실제 서비스에 맞게 구현 필요. 예시로 createInPort 호출 가정
-//            return service.createInPort(inPortConfiguration);
-//        } catch (RemoteException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-
-//    public OutPort createOutPort(@NonNull PortConfiguration outPortConfiguration) {
-//        Objects.requireNonNull(outPortConfiguration);
-//        IMessagingService service = serviceHelper.get();
-//        if (service == null) {
-//            throw new RuntimeException("MessagingService가 아직 바인딩되지 않았습니다. 연결을 기다려주세요.");
-//        }
-//        try {
-//            // 실제 서비스에 맞게 구현 필요. 예시로 createOutPort 호출 가정
-//            return service.createOutPort(outPortConfiguration);
-//        } catch (RemoteException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-
-    // 내부 타입 예시 (실제 구현에 맞게 수정 필요)
-    public interface InPort {}
-    public interface OutPort {}
-    public static class PortConfiguration {}
 
     public interface MessagingServiceConnectionListener {
         void onConnected();

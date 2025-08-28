@@ -47,8 +47,6 @@ public class MainActivity extends AppCompatActivity {
         unsubscribeButton = findViewById(R.id.unsubscribeButton);
         messageView = findViewById(R.id.messageView);
 
-        Log.d("MQTT", "📱 UI 컴포넌트 초기화 완료");
-
         // 화면에 시작 메시지 표시
         logMessage("🚀 Subscriber 앱이 시작되었습니다");
 
@@ -98,7 +96,6 @@ public class MainActivity extends AppCompatActivity {
                         public void onDisconnected() {
                             runOnUiThread(() -> {
                                 logMessage("❌ 브로커 서비스 바인딩 실패 또는 연결 끊김");
-                                logMessage("💡 브로커 앱(" + MESSAGE_BROKER_PACKAGE + ")이 설치되어 있고, 서비스가 exported=true인지 확인하세요");
                                 Log.w("MQTT", "❌ MessagingService 연결 실패 - 브로커 앱이 설치되지 않았거나 서비스가 exported=false일 수 있습니다");
                             });
                         }
