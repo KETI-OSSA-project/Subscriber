@@ -149,7 +149,6 @@ public class MessagingManager implements AutoCloseable {
             T convert(android.os.IBinder binder);
         }
         private final Context context;
-        private final ComponentName serviceComponent;
         private final BinderConverter<T> binderConverter;
         private final java.util.concurrent.atomic.AtomicReference<T> serviceRef = new java.util.concurrent.atomic.AtomicReference<>();
         private boolean bound = false;
@@ -172,48 +171,30 @@ public class MessagingManager implements AutoCloseable {
         };
 
         // 바인딩 관리자
-        private BoundServiceHelper(@NonNull Context context, @Nullable ComponentName serviceComponent, @Nullable String action, @NonNull BinderConverter<T> binderConverter) {
+        private BoundServiceHelper(@NonNull Context context, @Nullable String action, @NonNull BinderConverter<T> binderConverter) {
             this.context = context.getApplicationContext();
-            this.serviceComponent = serviceComponent;
+
             this.binderConverter = binderConverter;
-            if (action != null) {
-                bindServiceWithAction(action); // binding with action
-            } else {
-                bindService();
-            }
+            bindService();
         }
         public static <T> BoundServiceHelper<T> newInstanceWithAction(@NonNull Context context, @NonNull String action, @NonNull BinderConverter<T> binderConverter) {
-            return new BoundServiceHelper<>(context, null, action, binderConverter);
+            return new BoundServiceHelper<>(context, action, binderConverter);
         }
         public void bindService() {
             try {
                 android.content.Intent intent = new android.content.Intent();
-                intent.setComponent(serviceComponent);
+                intent.setComponent(new ComponentName(Constants.MESSAGE_BROKER_PACKAGE, Constants.MESSAGING_SERVICE));
                 boolean success = context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
                 if (!success) {
-                    Log.w(TAG, "Failed to bind to service: " + serviceComponent);
+                    Log.w(TAG, "바인딩 실패");
                     notifyExternalDisconnected();
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Exception while binding to service", e);
+                Log.e(TAG, "바인딩 중 예외", e);
                 notifyExternalDisconnected();
             }
         }
         // binding
-        public void bindServiceWithAction(String action) {
-            try {
-                android.content.Intent intent = new android.content.Intent();
-                intent.setComponent(new ComponentName("com.example.broker", "com.example.broker.MessagingService"));
-                boolean success = context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
-                if (!success) {
-                    Log.w(TAG, "Failed to bind to service with action: " + action);
-                    notifyExternalDisconnected();
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Exception while binding to service with action", e);
-                notifyExternalDisconnected();
-            }
-        }
         public void setExternalConnectionListener(ConnectionListener listener, Handler handler) {
             this.externalListener = listener;
             this.externalHandler = handler;
