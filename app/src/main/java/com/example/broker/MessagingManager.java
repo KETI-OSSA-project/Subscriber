@@ -3,27 +3,17 @@ package com.example.broker;
 import android.content.ComponentName;
 import android.content.Context;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.RemoteException;
-import androidx.annotation.MainThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import android.util.Log;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import com.example.broker.IMessagingService;
-import static com.example.broker.MessagingManager.Constants.MESSAGE_BROKER_PACKAGE;
-import static com.example.broker.MessagingManager.Constants.MESSAGING_SERVICE;
-import static java.util.Objects.requireNonNull;
+
 
 public class MessagingManager implements AutoCloseable {
-    private static final String TAG = MessagingManager.class.getSimpleName();
-    private static final ComponentName SERVICE =
-            ComponentName.createRelative(MESSAGE_BROKER_PACKAGE, MESSAGING_SERVICE);
     private final BoundServiceHelper<IMessagingService> serviceHelper;
-    private final UUID sessionId = UUID.randomUUID();
     private final String applicationId;
     private final String applicationPackageName;
 
@@ -59,6 +49,7 @@ public class MessagingManager implements AutoCloseable {
     private BoundServiceHelper.ConnectionListener buildConnectionListener(
             @Nullable MessagingServiceConnectionListener listener) {
         if (listener == null) return null;
+        // 서비스: onServiceConnected -> 클라이언트: listener.onConnected
         return new BoundServiceHelper.ConnectionListener() {
             @Override
             public void onConnected() { listener.onConnected(); }
@@ -193,9 +184,6 @@ public class MessagingManager implements AutoCloseable {
         }
         public static <T> BoundServiceHelper<T> newInstanceWithAction(@NonNull Context context, @NonNull String action, @NonNull BinderConverter<T> binderConverter) {
             return new BoundServiceHelper<>(context, null, action, binderConverter);
-        }
-        public static <T> BoundServiceHelper<T> newInstance(@NonNull Context context, @NonNull ComponentName serviceComponent, @NonNull BinderConverter<T> binderConverter) {
-            return new BoundServiceHelper<>(context, serviceComponent, null, binderConverter);
         }
         public void bindService() {
             try {
