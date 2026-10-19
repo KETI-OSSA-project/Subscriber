@@ -26,12 +26,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView messageView;
 
     private MessagingManager messagingManager;
-    private MessagingManager.MessageListener currentMessageListener;
-    private Filter currentFilter;
-
-    private static final String MESSAGE_BROKER_PACKAGE = MessagingManager.Constants.MESSAGE_BROKER_PACKAGE;
-    private static final String MESSAGING_SERVICE = MessagingManager.Constants.MESSAGING_SERVICE;
-
     private final Map<String, MessagingManager.MessageListener> listenerMap = new HashMap<>();
     private final Map<String, Filter> filterMap = new HashMap<>();
 

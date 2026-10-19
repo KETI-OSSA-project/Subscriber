@@ -14,8 +14,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MessagingManager implements AutoCloseable {
     private final BoundServiceHelper<IMessagingService> serviceHelper;
-    private final String applicationId;
-    private final String applicationPackageName;
 
     // MessageListener -> Stub 캐싱용 맵 추가
     private final ConcurrentHashMap<MessageListener, IMessageListener.Stub> stubMap = new ConcurrentHashMap<>();
@@ -26,8 +24,6 @@ public class MessagingManager implements AutoCloseable {
         serviceHelper = BoundServiceHelper.newInstanceWithAction(context,
                 Constants.MESSAGING_SERVICE_ACTION,
                 IMessagingService.Stub::asInterface);
-        applicationId = context.getPackageName();
-        applicationPackageName = applicationId.replace('.', '/');
     }
 
     @NonNull
@@ -173,7 +169,6 @@ public class MessagingManager implements AutoCloseable {
         // 바인딩 관리자
         private BoundServiceHelper(@NonNull Context context, @Nullable String action, @NonNull BinderConverter<T> binderConverter) {
             this.context = context.getApplicationContext();
-
             this.binderConverter = binderConverter;
             bindService();
         }
