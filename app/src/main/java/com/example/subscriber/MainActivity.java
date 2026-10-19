@@ -21,6 +21,12 @@ import com.example.broker.MessagingManager;
 
 import com.example.broker.R;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,11 +49,29 @@ public class MainActivity extends AppCompatActivity {
 
     // 모든 필터에 같은 리스너(L1)를 쓴다. 여러 필터에 맞아도 브로커가 한 번만 알린다(절차서 19번)
     private final MessagingManager.MessageListener messageListener = message -> {
-        byte[] payloadBytes = message.getPayload();
-        String payload = payloadBytes != null ? new String(payloadBytes) : "";
-        Log.i(TAG, "L1 onMessage topic=" + message.getTopic() + " id=" + message.getMessageId() + " payload=" + payload);
+        byte[] payloadBytes = message.getPayload() != null ? message.getPayload() : new byte[0];
+        String payload = new String(payloadBytes, StandardCharsets.UTF_8);
+        // 받은 원시 바이트를 그대로 저장한다(절차서 32번: adb pull로 가져가 송신 샘플과 비교). 마지막 메시지만 남김
+        try (FileOutputStream out = new FileOutputStream(new File(getExternalFilesDir(null), "last_payload.bin"))) {
+            out.write(payloadBytes);
+        } catch (IOException e) {
+            Log.w(TAG, "수신 페이로드 저장 실패", e);
+        }
+        // 여러 줄(XML)은 내용 대신 크기만 남기고, 송수신 대조용 sha256은 항상 남긴다
+        Log.i(TAG, "L1 onMessage topic=" + message.getTopic() + " id=" + message.getMessageId() + " bytes=" + payloadBytes.length
+                + " sha256=" + sha256(payloadBytes) + (payload.indexOf('\n') < 0 ? " payload=" + payload : ""));
         runOnUiThread(() -> logMessage("📥 [" + message.getTopic() + "] 수신: " + payload));
     };
+
+    static String sha256(byte[] data) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (byte b : MessageDigest.getInstance("SHA-256").digest(data)) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     private final BroadcastReceiver testReceiver = new BroadcastReceiver() {
         @Override
