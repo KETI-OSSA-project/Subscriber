@@ -1,5 +1,11 @@
 package com.example.subscriber;
 
+import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
@@ -25,9 +31,37 @@ public class MainActivity extends AppCompatActivity {
     private Button unsubscribeButton;
     private TextView messageView;
 
+    private static final String TAG = "Subscriber";
+
+    // 시험 신호(adb 셸만 보낼 수 있음). 예: am broadcast -a test.SUBSCRIBE --es topic 'sensor/+/temp'
+    private static final String ACTION_SUBSCRIBE = "test.SUBSCRIBE";
+    private static final String ACTION_UNSUBSCRIBE = "test.UNSUBSCRIBE";
+    private static final String ACTION_CLEAR = "test.CLEAR";
+
     private MessagingManager messagingManager;
-    private final Map<String, MessagingManager.MessageListener> listenerMap = new HashMap<>();
     private final Map<String, Filter> filterMap = new HashMap<>();
+
+    // 모든 필터에 같은 리스너(L1)를 쓴다. 여러 필터에 맞아도 브로커가 한 번만 알린다(절차서 19번)
+    private final MessagingManager.MessageListener messageListener = message -> {
+        byte[] payloadBytes = message.getPayload();
+        String payload = payloadBytes != null ? new String(payloadBytes) : "";
+        Log.i(TAG, "L1 onMessage topic=" + message.getTopic() + " id=" + message.getMessageId() + " payload=" + payload);
+        runOnUiThread(() -> logMessage("📥 [" + message.getTopic() + "] 수신: " + payload));
+    };
+
+    private final BroadcastReceiver testReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String topic = intent.getStringExtra("topic");
+            if (ACTION_CLEAR.equals(intent.getAction())) {
+                messageView.setText("");
+            } else if (topic != null) {
+                inputTopic.setText(topic);
+                if (ACTION_SUBSCRIBE.equals(intent.getAction())) subscribeTo(topic);
+                else unsubscribeFrom(topic);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +102,22 @@ public class MainActivity extends AppCompatActivity {
                 unsubscribeFrom(topic);
             }
         });
+
+        IntentFilter filter = new IntentFilter(ACTION_SUBSCRIBE);
+        filter.addAction(ACTION_UNSUBSCRIBE);
+        filter.addAction(ACTION_CLEAR);
+        // DUMP 권한을 가진 쪽만 보낼 수 있다: adb 셸은 갖고 있고 일반 앱은 받을 수 없는 권한
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(testReceiver, filter, Manifest.permission.DUMP, null, RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(testReceiver, filter, Manifest.permission.DUMP, null);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        unregisterReceiver(testReceiver);
+        super.onDestroy();
     }
 
     // MessagingManager 초기화 및 객체 생성
@@ -105,21 +155,10 @@ public class MainActivity extends AppCompatActivity {
     // broker로부터 메시지 수신하는 코드
     private void subscribeTo(String topic) {
         try {
-            // 이미 리스너가 있으면 재사용
-            MessagingManager.MessageListener messageListener = listenerMap.get(topic);
+            // 이미 필터가 있으면 재사용
             Filter filter = filterMap.get(topic);
-            if (messageListener == null || filter == null) {
+            if (filter == null) {
                 filter = new Filter.Builder().setTopic(topic).build();
-                messageListener = new MessagingManager.MessageListener() {
-                    @Override
-                    public void onMessage(Message message) {
-                        byte[] payloadBytes = message.getPayload();
-                        String payload = payloadBytes != null ? new String(payloadBytes) : "";
-                        runOnUiThread(() -> logMessage("\uD83D\uDCE5 [" + topic + "] 수신: " + payload));
-                    }
-                };
-                // 맵에 저장
-                listenerMap.put(topic, messageListener);
                 filterMap.put(topic, filter);
             }
             final MessagingManager.MessageListener finalMessageListener = messageListener;
@@ -175,17 +214,14 @@ public class MainActivity extends AppCompatActivity {
     private void unsubscribeFrom(String topic) {
         try {
             runOnUiThread(() -> logMessage("🔄 [" + topic + "] 구독 해제 요청 중..."));
-            MessagingManager.MessageListener messageListener = listenerMap.get(topic);
             Filter filter = filterMap.get(topic);
-            if (messageListener == null || filter == null) {
+            if (filter == null) {
                 logMessage("❌ [" + topic + "] 구독 해제 실패: 해당 토픽에 대한 구독 정보 없음");
                 return;
             }
             boolean result = messagingManager.unsubscribe(messageListener, filter);
             if (result) {
                 logMessage("✅ [" + topic + "] 구독 해제 성공");
-                // 맵에서 제거
-                listenerMap.remove(topic);
                 filterMap.remove(topic);
             } else {
                 logMessage("❌ [" + topic + "] 구독 해제 실패");
